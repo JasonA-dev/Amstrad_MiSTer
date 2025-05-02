@@ -1,3 +1,4 @@
+
 // PlayCity expansion by TotO,
 // implemented in VHDL by Slingshot
 // Verilog version with some modifications by Sorgelig
@@ -81,23 +82,20 @@ assign audio_l = al[9:2] + al[9:4];
 wire [7:0] chl_a, chl_b, chl_c;
 YM2149 psg_left
 (
-	.RESET(reset),
+	.RESET(~reset_n),
+
 	.CLK(clock),
 	.CE(ay_ce),
-	.SEL(0),
+	.SEL(1),
 	.MODE(0),
+
 	.BC(addr[8]),
 	.BDIR(ay_sel & addr[2]),
 	.DI(din),
-	.DO(8'hFF),
+
 	.CHANNEL_A(chl_a),
 	.CHANNEL_B(chl_b),
-	.CHANNEL_C(chl_c),
-	.ACTIVE(6'b0),
-	.IOA_in(8'hFF),
-	.IOA_out(8'hFF),
-	.IOB_in(8'hFF),
-	.IOB_out(8'hFF)
+	.CHANNEL_C(chl_c)
 );
 
 wire [9:0] ar = {2'b00, chr_a} + {2'b00, chr_b} + {2'b00, chr_c};
@@ -106,23 +104,20 @@ assign audio_r = ar[9:2] + ar[9:4];
 wire [7:0] chr_a, chr_b, chr_c;
 YM2149 psg_right
 (
-	.RESET(reset),
+	.RESET(~reset_n),
+
 	.CLK(clock),
 	.CE(ay_ce),
-	.SEL(0),
+	.SEL(1),
 	.MODE(0),
+
 	.BC(addr[8]),
 	.BDIR(ay_sel & addr[3]),
 	.DI(din),
-	.DO(8'hFF),
+
 	.CHANNEL_A(chr_a),
 	.CHANNEL_B(chr_b),
-	.CHANNEL_C(chr_c),
-	.ACTIVE(6'b0),
-	.IOA_in(8'hFF),
-	.IOA_out(8'hFF),
-	.IOB_in(8'hFF),
-	.IOB_out(8'hFF)
+	.CHANNEL_C(chr_c)
 );
 
 endmodule

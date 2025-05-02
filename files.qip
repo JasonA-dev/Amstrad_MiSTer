@@ -19,3 +19,4 @@ set_global_assignment -name VERILOG_FILE rtl/Amstrad_motherboard.v
 set_global_assignment -name VERILOG_FILE rtl/progressbar.v
 set_global_assignment -name SDC_FILE Amstrad.sdc
 set_global_assignment -name SYSTEMVERILOG_FILE Amstrad.sv
+set_global_assignment -name QIP_FILE rtl/GX4000/gx4000.qip
