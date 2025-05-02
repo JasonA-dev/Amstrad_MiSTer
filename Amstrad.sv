@@ -835,6 +835,90 @@ Amstrad_motherboard motherboard
 	.key_reset(key_reset)
 );
 
+// Internal signals for GX4000
+wire [1:0] gx4000_r, gx4000_g, gx4000_b;
+wire [7:0] gx4000_audio_l, gx4000_audio_r;
+reg gx4000_mode = 0;  // Default to CPC mode
+
+// Internal signals for motherboard outputs
+wire [1:0] cpc_r, cpc_g, cpc_b;
+wire [7:0] cpc_audio_l, cpc_audio_r;
+
+// GX4000 instance
+GX4000 gx4000_inst
+(
+    .clk_sys(clk_sys),
+    .reset(reset),
+    .gx4000_mode(gx4000_mode),
+    .plus_mode(1'b0),    // Disable Plus mode
+    
+    // CPU interface
+    .cpu_addr(cpu_addr),
+    .cpu_data(cpu_dout),
+    .cpu_wr(wr),
+    .cpu_rd(rd),
+    
+    // Video interface
+    .r_in(cpc_r),
+    .g_in(cpc_g),
+    .b_in(cpc_b),
+    .hblank(hbl),
+    .vblank(vbl),
+    .r_out(gx4000_r),
+    .g_out(gx4000_g),
+    .b_out(gx4000_b),
+    
+    // Audio interface
+    .cpc_audio_l(cpc_audio_l),
+    .cpc_audio_r(cpc_audio_r),
+    .audio_l(gx4000_audio_l),
+    .audio_r(gx4000_audio_r),
+    
+    // Joystick interface
+    .joy1(joy1),
+    .joy2(joy2),
+    .joy_swap(status[18]),
+    
+    // Cartridge interface
+    .cart_download(ioctl_download),
+    .cart_addr(ioctl_addr),
+    .cart_data(ioctl_dout),
+    .cart_wr(ioctl_wr),
+    
+    // ROM loading interface
+    .ioctl_wr(ioctl_wr),
+    .ioctl_addr(ioctl_addr),
+    .ioctl_dout(ioctl_dout),
+    .ioctl_download(ioctl_download),
+    
+    // Status outputs
+    .rom_type(),
+    .rom_size(),
+    .rom_checksum(),
+    .rom_version(),
+    .rom_date(),
+    .rom_title(),
+    .asic_valid(),
+    .asic_status(),
+    .audio_status()
+);
+
+// Connect motherboard outputs to intermediate signals
+assign cpc_r = r;
+assign cpc_g = g;
+assign cpc_b = b;
+assign cpc_audio_l = audio_l;
+assign cpc_audio_r = audio_r;
+
+// Combine video outputs
+assign r = gx4000_mode ? gx4000_r : cpc_r;
+assign g = gx4000_mode ? gx4000_g : cpc_g;
+assign b = gx4000_mode ? gx4000_b : cpc_b;
+
+// Combine audio outputs
+assign audio_l = gx4000_mode ? gx4000_audio_l : cpc_audio_l;
+assign audio_r = gx4000_mode ? gx4000_audio_r : cpc_audio_r;
+
 //////////////////////////////////////////////////////////////////////
 
 assign CLK_VIDEO = clk_sys;

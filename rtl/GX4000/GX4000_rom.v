@@ -91,11 +91,11 @@ module GX4000_rom
                 end
             endcase
         end
+        
+        // Plus-specific outputs
+        plus_bios_valid <= header_valid;
+        plus_bios_checksum <= rom_checksum;
+        plus_bios_version <= rom_version;
     end
-    
-    // Plus-specific outputs
-    assign plus_bios_valid = header_valid;
-    assign plus_bios_checksum = rom_checksum;
-    assign plus_bios_version = rom_version;
     
 endmodule 

@@ -154,7 +154,7 @@ module GX4000_memory
     
     // Memory interface
     assign mem_addr = is_cart ? cart_addr_internal : base_addr;
-    assign mem_data = cpu_data;
+    assign mem_data = access_allowed ? (is_cart ? cart_ram[cpu_addr[13:0]] : (is_exp_ram ? exp_ram_q : mem_q)) : access_error;
     assign mem_wr = cpu_wr && !is_exp_ram && access_allowed;
     assign mem_rd = cpu_rd && !is_exp_ram && access_allowed;
     
@@ -167,9 +167,5 @@ module GX4000_memory
     // Memory output
     wire [7:0] cart_ram_data = cart_ram[cpu_addr[13:0]];
     wire [7:0] exp_ram_data_internal = exp_ram_q;
-    wire [7:0] final_data = is_cart ? cart_ram_data : (is_exp_ram ? exp_ram_data_internal : mem_q);
-    
-    // Memory output with error status
-    assign mem_data = access_allowed ? final_data : access_error;
 
 endmodule 
