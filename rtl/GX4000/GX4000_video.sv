@@ -24,9 +24,9 @@ module GX4000_video
     input   [3:0] sprite_id,
     
     // Video output
-    output  [7:0] r_out,
-    output  [7:0] g_out,
-    output  [7:0] b_out,
+    output  [1:0] r_out,
+    output  [1:0] g_out,
+    output  [1:0] b_out,
     
     // Collision detection
     output  [7:0] collision_reg,
@@ -57,9 +57,9 @@ module GX4000_video
     reg [7:0] sprite_effect[0:7];
     
     // Video state
-    reg [7:0] r_reg;
-    reg [7:0] g_reg;
-    reg [7:0] b_reg;
+    reg [1:0] r_reg;
+    reg [1:0] g_reg;
+    reg [1:0] b_reg;
     reg [2:0] active_sprite;
     
     // Configuration registers
@@ -139,9 +139,9 @@ module GX4000_video
             screen_y <= 8'h00;
             video_mode <= 8'h00;
             collision_flags <= 8'h00;
-            r_reg <= 8'h00;
-            g_reg <= 8'h00;
-            b_reg <= 8'h00;
+            r_reg <= 2'h0;
+            g_reg <= 2'h0;
+            b_reg <= 2'h0;
             active_sprite <= 3'h0;
             
             // Initialize sprite transformations
@@ -459,9 +459,9 @@ module GX4000_video
                     // Use full 32-color palette
                 end else begin
                     // Use 16-color mode
-                    r_reg <= r_reg & 8'hF0;
-                    g_reg <= g_reg & 8'hF0;
-                    b_reg <= b_reg & 8'hF0;
+                    r_reg <= r_reg & 2'h3;
+                    g_reg <= g_reg & 2'h3;
+                    b_reg <= b_reg & 2'h3;
                 end
                 
                 // Apply sprite configuration
@@ -534,9 +534,9 @@ module GX4000_video
             end else begin
                 // Disable enhanced features
                 video_mode <= 8'h00;
-                r_reg <= r_reg & 8'hF0;
-                g_reg <= g_reg & 8'hF0;
-                b_reg <= b_reg & 8'hF0;
+                r_reg <= 2'h0;
+                g_reg <= 2'h0;
+                b_reg <= 2'h0;
             end
             
             // Frame counter for effects

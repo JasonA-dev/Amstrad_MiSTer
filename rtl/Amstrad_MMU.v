@@ -41,10 +41,13 @@ module Amstrad_MMU
 reg [2:0] RAMmap;
 reg [4:0] RAMpage;
 reg [7:0] ROMbank;
+reg old_wr;
+
+initial begin
+	old_wr = 0;
+end
 
 always @(posedge CLK) begin
-	reg old_wr = 0;
-
 	if (reset) begin
 		ROMbank    <=0;
 		RAMmap     <=0;

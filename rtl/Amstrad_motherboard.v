@@ -107,6 +107,29 @@ wire RFSH_n;
 wire INT_n;
 wire M1_n;
 
+`ifdef VERILATOR
+tv80s CPU
+(
+	.reset_n(~reset),
+	.clk(clk),
+	.cen(phi_en_p),
+	.wait_n(ready | (IORQ_n & MREQ_n) | no_wait),
+	.int_n(INT_n & ~irq),
+	.nmi_n(~nmi),
+	.busrq_n(1),
+	.m1_n(M1_n),
+	.mreq_n(MREQ_n),
+	.iorq_n(IORQ_n),
+	.rd_n(RD_n),
+	.wr_n(WR_n),
+	.rfsh_n(RFSH_n),
+	.halt_n(),
+	.busak_n(),
+	.A(A),
+	.di(crtc_dout & ppi_dout & cpu_din),
+	.dout(D)
+);
+`else
 T80pa CPU
 (
 	.reset_n(~reset),
@@ -131,6 +154,7 @@ T80pa CPU
 	.nmi_n(~nmi),
 	.wait_n(ready | (IORQ_n & MREQ_n) | no_wait) // workaround a bug in T80pa: should wait only in memory or io cycles
 );
+`endif
 
 wire crtc_hs, crtc_vs, crtc_de;
 wire [13:0] MA;

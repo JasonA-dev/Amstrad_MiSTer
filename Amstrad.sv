@@ -202,6 +202,9 @@ localparam CONF_STR = {
 	"FC3,E??,Load expansion;",
 	"-;",
 	"F4,CDT,Load tape;",
+	"F5,CPR,Load GX4000 CPR;",
+	"F6,BIN,Load GX4000 BIN;",
+	"-;",
 	"OK,Tape sound,Disabled,Enabled;",
 	"-;",
 	"OI,Joysticks swap,No,Yes;",
@@ -234,6 +237,7 @@ localparam CONF_STR = {
 	"P2-;",
 	"P2O5,Distributor,Amstrad,Schneider;",
 	"P2O4,Model,CPC 6128,CPC 664;",
+	"P2OW,GX4000 mode,Disabled,Enabled;",
 	"P2OV,Tape progressbar,Off,On;",
 
 	"-;",
@@ -345,10 +349,14 @@ hps_io #(.CONF_STR(CONF_STR), .VDNUM(2)) hps_io
 
 wire        rom_download = ioctl_download && (ioctl_index[4:0] < 4);
 wire        tape_download = ioctl_download && (ioctl_index == 4);
+wire        gx4000_cpr_download = ioctl_download && (ioctl_index == 5);  // F5 - CPR files
+wire        gx4000_bin_download = ioctl_download && (ioctl_index == 6);  // F6 - BIN files
+wire        gx4000_download = gx4000_cpr_download | gx4000_bin_download;
 
 // A 8MB bank is split to 2 halves
-// Fist 4 MB is OS ROM + RAM pages + MF2 ROM
+// First 4 MB is OS ROM + RAM pages + MF2 ROM
 // Second 4 MB is max. 256 pages of HI rom
+// GX4000 cartridges are loaded into the second half
 
 reg         boot_wr = 0;
 reg  [22:0] boot_a;
@@ -363,29 +371,35 @@ always @(posedge clk_sys) begin
 	reg       combo = 0;
 	reg       old_download;
 
-	if(rom_download & ioctl_wr) begin
+	if((rom_download | gx4000_download) & ioctl_wr) begin
 		romdl_wait <= 1;
 		boot_dout <= ioctl_dout;
-
 		boot_a[13:0] <= ioctl_addr[13:0];
 
 		if(ioctl_index) begin
-			boot_a[22]    <= page[8];
-			boot_a[21:14] <= page[7:0] + ioctl_addr[21:14];
-			boot_bank     <= {1'b0, &ioctl_index[7:6]};
+			if (gx4000_download) begin
+				// GX4000 cartridges are loaded into the second half of memory
+				boot_a[22]    <= 1'b1;  // Use second half of memory
+				boot_a[21:14] <= ioctl_addr[21:14];  // Use file address directly
+				boot_bank     <= 1'b0;  // Always use bank 0 for GX4000
+			end else begin
+				boot_a[22]    <= page[8];
+				boot_a[21:14] <= page[7:0] + ioctl_addr[21:14];
+				boot_bank     <= {1'b0, &ioctl_index[7:6]};
+			end
 		end
 		else begin
 			case(ioctl_addr[24:14])
-					0,4: boot_a[22:14] <= 9'h000; //OS
-					1,5: boot_a[22:14] <= 9'h100; //BASIC
-					2,6: boot_a[22:14] <= 9'h107; //AMSDOS
-					3,7: boot_a[22:14] <= 9'h0ff; //MF2
-			  default:    romdl_wait <= 0;
+				0,4: boot_a[22:14] <= 9'h000; //OS
+				1,5: boot_a[22:14] <= 9'h100; //BASIC
+				2,6: boot_a[22:14] <= 9'h107; //AMSDOS
+				3,7: boot_a[22:14] <= 9'h0ff; //MF2
+				default: romdl_wait <= 0;
 			endcase
 
 			case(ioctl_addr[24:14])
-			  0,1,2,3: boot_bank <= 0; //CPC6128
-			  4,5,6,7: boot_bank <= 1; //CPC664
+				0,1,2,3: boot_bank <= 0; //CPC6128
+				4,5,6,7: boot_bank <= 1; //CPC664
 			endcase
 		end
 	end
@@ -408,16 +422,22 @@ always @(posedge clk_sys) begin
 	end
 
 	old_download <= ioctl_download;
-	if(~old_download & ioctl_download & rom_download) begin
+	if(~old_download & ioctl_download & (rom_download | gx4000_download)) begin
 		if(ioctl_index) begin
-			page <= 9'h1EE; // some unused page for malformed file extension
-			combo <= 0;
-			if(ioctl_file_ext[15:8] >= "0" && ioctl_file_ext[15:8] <= "9") page[7:4] <= ioctl_file_ext[11:8];
-			if(ioctl_file_ext[15:8] >= "A" && ioctl_file_ext[15:8] <= "F") page[7:4] <= ioctl_file_ext[11:8]+4'd9;
-			if(ioctl_file_ext[7:0]  >= "0" && ioctl_file_ext[7:0]  <= "9") page[3:0] <= ioctl_file_ext[3:0];
-			if(ioctl_file_ext[7:0]  >= "A" && ioctl_file_ext[7:0]  <= "F") page[3:0] <= ioctl_file_ext[3:0] +4'd9;
-			if(ioctl_file_ext[15:0] == "ZZ") page <= 0;
-			if(ioctl_file_ext[15:0] == "Z0") begin page <= 0; combo <= 1; end
+			if (gx4000_download) begin
+				// For GX4000 files, use the file address directly
+				page <= ioctl_addr[21:14];
+				combo <= 0;
+			end else begin
+				page <= 9'h1EE; // some unused page for malformed file extension
+				combo <= 0;
+				if(ioctl_file_ext[15:8] >= "0" && ioctl_file_ext[15:8] <= "9") page[7:4] <= ioctl_file_ext[11:8];
+				if(ioctl_file_ext[15:8] >= "A" && ioctl_file_ext[15:8] <= "F") page[7:4] <= ioctl_file_ext[11:8]+4'd9;
+				if(ioctl_file_ext[7:0]  >= "0" && ioctl_file_ext[7:0]  <= "9") page[3:0] <= ioctl_file_ext[3:0];
+				if(ioctl_file_ext[7:0]  >= "A" && ioctl_file_ext[7:0]  <= "F") page[3:0] <= ioctl_file_ext[3:0] +4'd9;
+				if(ioctl_file_ext[15:0] == "ZZ") page <= 0;
+				if(ioctl_file_ext[15:0] == "Z0") begin page <= 0; combo <= 1; end
+			end
 		end
 	end
 end
@@ -463,9 +483,15 @@ sdram sdram
 reg model = 0;
 reg reset;
 
+reg gx4000_mode = status[23];
+
 always @(posedge clk_sys) begin
-	if(reset) model <= status[4];
-	reset <= RESET | status[0] | buttons[1] | rom_download | key_reset;
+    if(reset) begin
+        model <= status[4];
+        gx4000_mode <= status[23];
+    end
+    
+    reset <= RESET | status[0] | buttons[1] | rom_download | key_reset;
 end
 
 ////////////////////// CDT playback ///////////////////////////////
@@ -838,11 +864,10 @@ Amstrad_motherboard motherboard
 // Internal signals for GX4000
 wire [1:0] gx4000_r, gx4000_g, gx4000_b;
 wire [7:0] gx4000_audio_l, gx4000_audio_r;
-reg gx4000_mode = 0;  // Default to CPC mode
 
 // Internal signals for motherboard outputs
-wire [1:0] cpc_r, cpc_g, cpc_b;
-wire [7:0] cpc_audio_l, cpc_audio_r;
+wire [1:0] mb_r, mb_g, mb_b;
+wire [7:0] mb_audio_l, mb_audio_r;
 
 // GX4000 instance
 GX4000 gx4000_inst
@@ -859,9 +884,9 @@ GX4000 gx4000_inst
     .cpu_rd(rd),
     
     // Video interface
-    .r_in(cpc_r),
-    .g_in(cpc_g),
-    .b_in(cpc_b),
+    .r_in(mb_r),
+    .g_in(mb_g),
+    .b_in(mb_b),
     .hblank(hbl),
     .vblank(vbl),
     .r_out(gx4000_r),
@@ -869,8 +894,8 @@ GX4000 gx4000_inst
     .b_out(gx4000_b),
     
     // Audio interface
-    .cpc_audio_l(cpc_audio_l),
-    .cpc_audio_r(cpc_audio_r),
+    .cpc_audio_l(mb_audio_l),
+    .cpc_audio_r(mb_audio_r),
     .audio_l(gx4000_audio_l),
     .audio_r(gx4000_audio_r),
     
@@ -900,24 +925,37 @@ GX4000 gx4000_inst
     .rom_title(),
     .asic_valid(),
     .asic_status(),
-    .audio_status()
+    .audio_status(),
+    
+    // Video source selection
+    .use_asic(1'b0)  // Use video module by default
 );
 
 // Connect motherboard outputs to intermediate signals
-assign cpc_r = r;
-assign cpc_g = g;
-assign cpc_b = b;
-assign cpc_audio_l = audio_l;
-assign cpc_audio_r = audio_r;
+assign mb_r = r;
+assign mb_g = g;
+assign mb_b = b;
+assign mb_audio_l = audio_l;
+assign mb_audio_r = audio_r;
 
-// Combine video outputs
-assign r = gx4000_mode ? gx4000_r : cpc_r;
-assign g = gx4000_mode ? gx4000_g : cpc_g;
-assign b = gx4000_mode ? gx4000_b : cpc_b;
+// Final video outputs
+wire [1:0] final_r = gx4000_mode ? gx4000_r : mb_r;
+wire [1:0] final_g = gx4000_mode ? gx4000_g : mb_g;
+wire [1:0] final_b = gx4000_mode ? gx4000_b : mb_b;
 
-// Combine audio outputs
-assign audio_l = gx4000_mode ? gx4000_audio_l : cpc_audio_l;
-assign audio_r = gx4000_mode ? gx4000_audio_r : cpc_audio_r;
+// Connect final outputs to color_mix inputs
+wire [7:0] R_in = {final_r, final_r, final_r, final_r};  // Expand 2-bit to 8-bit
+wire [7:0] G_in = {final_g, final_g, final_g, final_g};  // Expand 2-bit to 8-bit
+wire [7:0] B_in = {final_b, final_b, final_b, final_b};  // Expand 2-bit to 8-bit
+
+// Audio mixing logic
+wire [8:0] audio_sys_l = audio_l + {tape_rec, 1'b0, tape_play & status[20], 3'd0} + (gx4000_mode ? gx4000_audio_l : 8'd0);
+wire [8:0] audio_sys_r = audio_r + {tape_rec, 1'b0, tape_play & status[20], 3'd0} + (gx4000_mode ? gx4000_audio_r : 8'd0);
+
+assign AUDIO_S   = 0;
+assign AUDIO_MIX = status[8:7];
+assign AUDIO_L   = {audio_sys_l + (playcity_ena ? playcity_audio_l : audio_sys_l), 7'd0};
+assign AUDIO_R   = {audio_sys_r + (playcity_ena ? playcity_audio_r : audio_sys_r), 7'd0};
 
 //////////////////////////////////////////////////////////////////////
 
@@ -1000,9 +1038,9 @@ end
 video_mixer #(.LINE_LENGTH(800), .GAMMA(1)) video_mixer
 (
 	.*,
-	.R(R[7:0] | {8{progress_pix}}),
-	.G(G[7:0] | {8{progress_pix}}),
-	.B(B[7:0] | {8{progress_pix}}),
+	.R(R_in),
+	.G(G_in),
+	.B(B_in),
 	.VGA_DE(vga_de),
 	.freeze_sync(),
 	.scandoubler((scale || forced_scandoubler) && !interlace)
@@ -1027,18 +1065,6 @@ video_freak video_freak
 	.CROP_OFF(0),
 	.SCALE(status[29:28])
 );
-
-//////////////////////////////////////////////////////////////////////
-
-wire [7:0] audio_l, audio_r;
-
-wire [8:0] audio_sys_l = audio_l + {tape_rec, 1'b0, tape_play & status[20], 3'd0};
-wire [8:0] audio_sys_r = audio_r + {tape_rec, 1'b0, tape_play & status[20], 3'd0};
-
-assign AUDIO_S   = 0;
-assign AUDIO_MIX = status[8:7];
-assign AUDIO_L   = {audio_sys_l + (playcity_ena ? playcity_audio_l : audio_sys_l), 7'd0};
-assign AUDIO_R   = {audio_sys_r + (playcity_ena ? playcity_audio_r : audio_sys_r), 7'd0};
 
 //////////////////////////////////////////////////////////////////////
 

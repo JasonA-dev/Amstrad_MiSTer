@@ -13,9 +13,9 @@ module GX4000_ASIC
     input         vblank,
     
     // Video output
-    output  [7:0] r_out,
-    output  [7:0] g_out,
-    output  [7:0] b_out,
+    output  [1:0] r_out,
+    output  [1:0] g_out,
+    output  [1:0] b_out,
     
     // Sprite control
     input  [15:0] cpu_addr,
@@ -98,6 +98,11 @@ module GX4000_ASIC
     // Position counters
     reg [7:0] hpos;
     reg [7:0] vpos;
+    
+    // Video state
+    reg [1:0] r_reg;
+    reg [1:0] g_reg;
+    reg [1:0] b_reg;
     
     // Position counter update
     always @(posedge clk_sys) begin
@@ -319,18 +324,23 @@ module GX4000_ASIC
         if (gx4000_mode && enhanced_mode) begin
             if (sprite_pixel != 0) begin
                 // Sprite pixel
-                {r_out, g_out, b_out} = enhanced_palette[sprite_color[sprite_index]];
+                {r_reg, g_reg, b_reg} = enhanced_palette[sprite_color[sprite_index]];
             end else begin
                 // Background pixel
-                {r_out, g_out, b_out} = enhanced_palette[{r_in, g_in, b_in}];
+                {r_reg, g_reg, b_reg} = {r_in, g_in, b_in};
             end
         end else begin
             // Standard CPC mode
-            r_out = {r_in, 6'b0};
-            g_out = {g_in, 6'b0};
-            b_out = {b_in, 6'b0};
+            r_reg = {r_in, 1'b0};
+            g_reg = {g_in, 1'b0};
+            b_reg = {b_in, 1'b0};
         end
     end
+    
+    // Video output
+    assign r_out = r_reg;
+    assign g_out = g_reg;
+    assign b_out = b_reg;
     
     // ASIC status
     assign asic_valid = (asic_state == STATE_VERIFY) && 

@@ -17,9 +17,9 @@ module GX4000
     input   [1:0] b_in,
     input         hblank,
     input         vblank,
-    output  [7:0] r_out,
-    output  [7:0] g_out,
-    output  [7:0] b_out,
+    output  [1:0] r_out,
+    output  [1:0] g_out,
+    output  [1:0] b_out,
     
     // Audio interface
     input   [7:0] cpc_audio_l,
@@ -53,7 +53,10 @@ module GX4000
     output [63:0] rom_title,
     output        asic_valid,
     output  [7:0] asic_status,
-    output  [7:0] audio_status
+    output  [7:0] audio_status,
+    
+    // Video source selection
+    input         use_asic
 );
 
     // Internal signals
@@ -163,9 +166,9 @@ module GX4000
         .b_in(b_in),
         .hblank(hblank),
         .vblank(vblank),
-        .r_out(r_out),
-        .g_out(g_out),
-        .b_out(b_out),
+        .r_out(video_r_out),
+        .g_out(video_g_out),
+        .b_out(video_b_out),
         .sprite_pixel(sprite_pixel),
         .sprite_active(sprite_active),
         .sprite_id(sprite_id),
@@ -185,9 +188,9 @@ module GX4000
         .b_in(b_in),
         .hblank(hblank),
         .vblank(vblank),
-        .r_out(r_out),
-        .g_out(g_out),
-        .b_out(b_out),
+        .r_out(asic_r_out),
+        .g_out(asic_g_out),
+        .b_out(asic_b_out),
         .cpu_addr(cpu_addr),
         .cpu_data(cpu_data),
         .cpu_wr(cpu_wr),
@@ -265,5 +268,13 @@ module GX4000
         .auto_boot(auto_boot),
         .boot_addr(boot_addr)
     );
+
+    // Video output multiplexing
+    wire [1:0] video_r_out, video_g_out, video_b_out;
+    wire [1:0] asic_r_out, asic_g_out, asic_b_out;
+
+    assign r_out = use_asic ? asic_r_out : video_r_out;
+    assign g_out = use_asic ? asic_g_out : video_g_out;
+    assign b_out = use_asic ? asic_b_out : video_b_out;
 
 endmodule 
