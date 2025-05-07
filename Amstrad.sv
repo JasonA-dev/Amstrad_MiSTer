@@ -238,8 +238,8 @@ localparam CONF_STR = {
 	"P2-;",
 	"P2O5,Distributor,Amstrad,Schneider;",
 	"P2O4,Model,CPC 6128,CPC 664;",
-	"P2OW,GX4000 mode,Disabled,Enabled;",
-	"P2OX,6128Plus mode,Disabled,Enabled;",
+	"P2o0,GX4000 mode,Disabled,Enabled;",
+	"P2o1,6128Plus mode,Disabled,Enabled;",
 	"P2OV,Tape progressbar,Off,On;",
 
 	"-;",
