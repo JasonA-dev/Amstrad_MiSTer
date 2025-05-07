@@ -1,0 +1,21 @@
+#!/bin/bash
+INSTALL_DIR="$HOME/os/oss-cad-suite"
+
+# Path to the iverilog executable
+IVERILOG_EXEC="$INSTALL_DIR/libexec/iverilog"
+
+# Remove quarantine attribute if present
+if [ -f "$IVERILOG_EXEC" ]; then
+    echo "Attempting to remove quarantine attribute from $IVERILOG_EXEC"
+    xattr -d com.apple.quarantine "$IVERILOG_EXEC" 2>/dev/null || true
+fi
+
+# Run the executable
+if [ -x "$IVERILOG_EXEC" ]; then
+    exec "$IVERILOG_EXEC" -p "VVP_EXECUTABLE=$INSTALL_DIR/bin/vvp" "$@"
+else
+    echo "ERROR: Cannot execute $IVERILOG_EXEC"
+    echo "You may need to manually allow this executable in System Preferences > Security & Privacy"
+    echo "Or run: xattr -d com.apple.quarantine $IVERILOG_EXEC"
+    exit 1
+fi 

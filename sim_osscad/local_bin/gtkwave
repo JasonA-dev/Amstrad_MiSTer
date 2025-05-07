@@ -1,0 +1,21 @@
+#!/bin/bash
+INSTALL_DIR="$HOME/os/oss-cad-suite"
+
+# Path to the gtkwave executable
+GTKWAVE_EXEC="$INSTALL_DIR/bin/gtkwave"
+
+# Remove quarantine attribute if present
+if [ -f "$GTKWAVE_EXEC" ]; then
+    echo "Attempting to remove quarantine attribute from $GTKWAVE_EXEC"
+    xattr -d com.apple.quarantine "$GTKWAVE_EXEC" 2>/dev/null || true
+fi
+
+# Run the executable
+if [ -x "$GTKWAVE_EXEC" ]; then
+    exec "$GTKWAVE_EXEC" "$@"
+else
+    echo "ERROR: Cannot execute $GTKWAVE_EXEC"
+    echo "You may need to manually allow this executable in System Preferences > Security & Privacy"
+    echo "Or run: xattr -d com.apple.quarantine $GTKWAVE_EXEC"
+    exit 1
+fi 

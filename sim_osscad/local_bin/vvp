@@ -1,0 +1,21 @@
+#!/bin/bash
+INSTALL_DIR="$HOME/os/oss-cad-suite"
+
+# Path to the vvp executable
+VVP_EXEC="$INSTALL_DIR/libexec/vvp"
+
+# Remove quarantine attribute if present
+if [ -f "$VVP_EXEC" ]; then
+    echo "Attempting to remove quarantine attribute from $VVP_EXEC"
+    xattr -d com.apple.quarantine "$VVP_EXEC" 2>/dev/null || true
+fi
+
+# Run the executable
+if [ -x "$VVP_EXEC" ]; then
+    exec "$VVP_EXEC" "$@"
+else
+    echo "ERROR: Cannot execute $VVP_EXEC"
+    echo "You may need to manually allow this executable in System Preferences > Security & Privacy"
+    echo "Or run: xattr -d com.apple.quarantine $VVP_EXEC"
+    exit 1
+fi 

@@ -457,11 +457,14 @@ module GX4000_video
                 // Apply palette configuration
                 if (config_palette[0]) begin // Enable 32-color mode
                     // Use full 32-color palette
+                    r_reg <= palette[sprite_pixel[7:5]][23:16];
+                    g_reg <= palette[sprite_pixel[4:2]][15:8];
+                    b_reg <= palette[sprite_pixel[1:0]][7:0];
                 end else begin
                     // Use 16-color mode
-                    r_reg <= r_reg & 2'h3;
-                    g_reg <= g_reg & 2'h3;
-                    b_reg <= b_reg & 2'h3;
+                    r_reg <= palette[sprite_pixel[7:5]][23:16] & 2'h3;
+                    g_reg <= palette[sprite_pixel[4:2]][15:8] & 2'h3;
+                    b_reg <= palette[sprite_pixel[1:0]][7:0] & 2'h3;
                 end
                 
                 // Apply sprite configuration
@@ -547,9 +550,9 @@ module GX4000_video
     end
     
     // Video output
-    assign r_out = r_reg;
-    assign g_out = g_reg;
-    assign b_out = b_reg;
+    assign r_out = r_reg[1:0];
+    assign g_out = g_reg[1:0];
+    assign b_out = b_reg[1:0];
     
     // Collision register
     assign collision_reg = collision_flags;

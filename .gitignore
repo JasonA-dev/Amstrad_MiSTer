@@ -37,3 +37,12 @@ c5_pin_model_dump.txt
 *.xml
 *_netlist
 *.cdf
+verilator_macOSSilicon/*
+verilator_macOSSilicon/.DS_Store
+verilator_macOSSilicon/Makefile
+verilator_macOSSilicon/verilated.o
+verilator_macOSSilicon/verilated_vcd_c.o
+.gitignore
+verilated_vcd_c.o
+verilated.o
+.gitignore

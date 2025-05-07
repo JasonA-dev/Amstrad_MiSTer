@@ -204,6 +204,7 @@ localparam CONF_STR = {
 	"F4,CDT,Load tape;",
 	"F5,CPR,Load GX4000 CPR;",
 	"F6,BIN,Load GX4000 BIN;",
+	"F7,CPR,Load 6128Plus CPR;",
 	"-;",
 	"OK,Tape sound,Disabled,Enabled;",
 	"-;",
@@ -238,6 +239,7 @@ localparam CONF_STR = {
 	"P2O5,Distributor,Amstrad,Schneider;",
 	"P2O4,Model,CPC 6128,CPC 664;",
 	"P2OW,GX4000 mode,Disabled,Enabled;",
+	"P2OX,6128Plus mode,Disabled,Enabled;",
 	"P2OV,Tape progressbar,Off,On;",
 
 	"-;",
@@ -253,6 +255,8 @@ wire locked;
 wire st_right_shift_mod = status[22];
 wire st_keypad_mod = status[23];
 wire st_progressbar = status[31];
+wire gx4000_mode = status[32];
+wire plus_mode = status[33];
 
 pll pll
 (
@@ -301,7 +305,11 @@ wire [24:0] ps2_mouse;
 wire  [1:0] buttons;
 wire  [6:0] joy1;
 wire  [6:0] joy2;
-wire [31:0] status;
+wire [63:0] status;
+
+// Default values for status_in and status_set
+wire [63:0] status_in = status;
+wire        status_set = Fn[1];
 
 wire        forced_scandoubler;
 wire [21:0] gamma_bus;
@@ -331,8 +339,8 @@ hps_io #(.CONF_STR(CONF_STR), .VDNUM(2)) hps_io
 
 	.buttons(buttons),
 	.status(status),
-	.status_in({status[31:21],~status[20],status[19:0]}),
-	.status_set(Fn[1]),
+	.status_in(status_in),
+	.status_set(status_set),
 	.status_menumask({en270p,1'b0}),
 
 	.forced_scandoubler(forced_scandoubler),
@@ -352,11 +360,13 @@ wire        tape_download = ioctl_download && (ioctl_index == 4);
 wire        gx4000_cpr_download = ioctl_download && (ioctl_index == 5);  // F5 - CPR files
 wire        gx4000_bin_download = ioctl_download && (ioctl_index == 6);  // F6 - BIN files
 wire        gx4000_download = gx4000_cpr_download | gx4000_bin_download;
+wire        plus_rom_download = ioctl_download && (ioctl_index == 7);    // F7 - 6128Plus CPR
 
 // A 8MB bank is split to 2 halves
 // First 4 MB is OS ROM + RAM pages + MF2 ROM
 // Second 4 MB is max. 256 pages of HI rom
 // GX4000 cartridges are loaded into the second half
+// 6128Plus CPR is loaded into a dedicated area
 
 reg         boot_wr = 0;
 reg  [22:0] boot_a;
@@ -364,6 +374,7 @@ reg   [1:0] boot_bank;
 reg   [7:0] boot_dout;
 
 reg [255:0] rom_map = '0;
+reg         plus_rom_loaded = 0;
 
 reg         romdl_wait = 0;
 always @(posedge clk_sys) begin
@@ -371,17 +382,23 @@ always @(posedge clk_sys) begin
 	reg       combo = 0;
 	reg       old_download;
 
-	if((rom_download | gx4000_download) & ioctl_wr) begin
+	if((rom_download | gx4000_download | plus_rom_download) & ioctl_wr) begin
 		romdl_wait <= 1;
 		boot_dout <= ioctl_dout;
 		boot_a[13:0] <= ioctl_addr[13:0];
 
 		if(ioctl_index) begin
-			if (gx4000_download) begin
+			if (plus_rom_download) begin
+				// 6128Plus CPR is loaded into a dedicated area
+				boot_a[22]    <= 1'b1;   // Use second half of memory
+				boot_a[21:14] <= 8'hF0;  // Dedicated 6128Plus CPR area
+				boot_bank     <= 1'b0;   // Always use bank 0 for 6128Plus CPR
+				plus_rom_loaded <= 1;    // Mark 6128Plus CPR as loaded
+			end else if (gx4000_download) begin
 				// GX4000 cartridges are loaded into the second half of memory
-				boot_a[22]    <= 1'b1;  // Use second half of memory
+				boot_a[22]    <= 1'b1;   // Use second half of memory
 				boot_a[21:14] <= ioctl_addr[21:14];  // Use file address directly
-				boot_bank     <= 1'b0;  // Always use bank 0 for GX4000
+				boot_bank     <= 1'b0;   // Always use bank 0 for GX4000
 			end else begin
 				boot_a[22]    <= page[8];
 				boot_a[21:14] <= page[7:0] + ioctl_addr[21:14];
@@ -422,7 +439,7 @@ always @(posedge clk_sys) begin
 	end
 
 	old_download <= ioctl_download;
-	if(~old_download & ioctl_download & (rom_download | gx4000_download)) begin
+	if(~old_download & ioctl_download & (rom_download | gx4000_download | plus_rom_download)) begin
 		if(ioctl_index) begin
 			if (gx4000_download) begin
 				// For GX4000 files, use the file address directly
@@ -483,12 +500,9 @@ sdram sdram
 reg model = 0;
 reg reset;
 
-reg gx4000_mode = status[23];
-
 always @(posedge clk_sys) begin
     if(reset) begin
         model <= status[4];
-        gx4000_mode <= status[23];
     end
     
     reset <= RESET | status[0] | buttons[1] | rom_download | key_reset;
@@ -875,7 +889,7 @@ GX4000 gx4000_inst
     .clk_sys(clk_sys),
     .reset(reset),
     .gx4000_mode(gx4000_mode),
-    .plus_mode(1'b0),    // Disable Plus mode
+    .plus_mode(plus_mode),
     
     // CPU interface
     .cpu_addr(cpu_addr),
@@ -928,7 +942,10 @@ GX4000 gx4000_inst
     .audio_status(),
     
     // Video source selection
-    .use_asic(1'b0)  // Use video module by default
+    .use_asic(1'b0),  // Use video module by default
+    
+    // Debug features
+    .force_unlock(1'b0)        // Disable force unlock by default
 );
 
 // Connect motherboard outputs to intermediate signals

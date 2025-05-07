@@ -6,7 +6,7 @@ module GX4000_cartridge
     input         plus_mode,
     
     // Cartridge interface
-    input  [15:0] cart_addr,
+    input  [24:0] cart_addr,
     input   [7:0] cart_data,
     input         cart_rd,
     input         cart_wr,
@@ -42,7 +42,8 @@ always @(posedge clk_sys) begin
         rom_bank <= 8'h00;
         auto_boot_reg <= 0;
         boot_addr_reg <= 16'h0000;
-    end else if (gx4000_mode && cart_wr && cart_addr[15:8] == 8'h70) begin
+    end else if (gx4000_mode && cart_wr && cart_addr[24:8] == 17'h7000) begin
+        // Use the lower 8 bits as the register selection
         case (cart_addr[7:0])
             8'h00: rom_bank <= cart_data;
             8'h01: auto_boot_reg <= cart_data[0];
@@ -55,6 +56,7 @@ end
 // ROM access
 always @(posedge clk_sys) begin
     if (gx4000_mode && cart_rd) begin
+        // Use the lower 15 bits of the address
         rom_addr_reg <= {rom_bank, cart_addr[14:0]};
         rom_data_reg <= cart_data;
     end

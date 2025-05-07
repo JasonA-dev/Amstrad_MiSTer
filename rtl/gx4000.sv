@@ -56,7 +56,10 @@ module GX4000
     output  [7:0] audio_status,
     
     // Video source selection
-    input         use_asic
+    input         use_asic,
+    
+    // Debug features
+    input         force_unlock   // Force ASIC unlock
 );
 
     // Internal signals
@@ -82,12 +85,10 @@ module GX4000
     (
         .clk_sys(clk_sys),
         .reset(reset),
-        .gx4000_mode(gx4000_mode),
-        .plus_mode(plus_mode),
-        .ioctl_wr(ioctl_wr),
-        .ioctl_addr(ioctl_addr),
-        .ioctl_dout(ioctl_dout),
-        .ioctl_download(ioctl_download),
+        .file_wr(ioctl_wr),
+        .file_addr(ioctl_addr),
+        .file_data(ioctl_dout),
+        .file_load(ioctl_download),
         .rom_type(rom_type),
         .rom_size(rom_size),
         .rom_checksum(rom_checksum),
@@ -192,7 +193,7 @@ module GX4000
         .g_out(asic_g_out),
         .b_out(asic_b_out),
         .cpu_addr(cpu_addr),
-        .cpu_data(cpu_data),
+        .cpu_data_in(cpu_data),
         .cpu_wr(cpu_wr),
         .cpu_rd(cpu_rd),
         .cart_download(cart_download),
@@ -200,7 +201,8 @@ module GX4000
         .cart_data(cart_data),
         .cart_wr(cart_wr),
         .asic_valid(asic_valid),
-        .asic_status(asic_status)
+        .asic_status(asic_status),
+        .force_unlock(force_unlock)
     );
 
     // Audio module instance
