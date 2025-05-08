@@ -190,7 +190,7 @@ assign HDMI_FREEZE = 0;
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-//   X XXXXXXXXXXXXXXXXX XXXXXXXXXX XX
+// X X X XXXXXXXXXXXXXXX XXXXXXXXXX XX        XXX
 
 `include "build_id.v"
 localparam CONF_STR = {
@@ -236,7 +236,7 @@ localparam CONF_STR = {
 	"P2O6,CPU timings,Original,Fast;",
 	"P2OGH,FDC,Original,Fast,Disabled;",
 	"P2-;",
-	"P2O5,Distributor,Amstrad,Schneider;",
+	"P2oAC,Distributor,Amstrad,Orion,Schneider,Awa,Solavox,Saisho,Triumph,Isp;",
 	"P2O4,Model,CPC 6128,CPC 664;",
 	"P2o0,GX4000 mode,Disabled,Enabled;",
 	"P2o1,6128Plus mode,Disabled,Enabled;",
@@ -824,7 +824,7 @@ Amstrad_motherboard motherboard
 	.Fn(Fn),
 
 	.no_wait(status[6] & ~tape_motor),
-	.ppi_jumpers({2'b11, ~status[5], 1'b1}),
+	.ppi_jumpers({1'b1, ~status[44:42]}),
 	.crtc_type(~status[2]),
 	.sync_filter(1),
 
