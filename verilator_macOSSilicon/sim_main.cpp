@@ -77,7 +77,7 @@ const int input_pause   = 11;
 #define VGA_SCALE_X vga_scale
 #define VGA_SCALE_Y vga_scale
 SimVideo video(VGA_WIDTH, VGA_HEIGHT, VGA_ROTATE);
-float vga_scale = 1;
+float vga_scale = 2;
 
 // Verilog module
 // --------------
@@ -179,10 +179,15 @@ int verilate() {
 
 			// If the design has a "pixel" enable at rising edge
 			if (top->top__DOT__ce_pix) {
-				uint32_t colour = 0xFF000000 
-				               | (top->VGA_B << 16) 
-				               | (top->VGA_G << 8) 
-				               |  top->VGA_R;
+				uint32_t colour = 0xFF000000;
+				
+				// Scale up the 2-bit color to 8-bit for better visibility
+				uint8_t r_val = top->VGA_R * 0x55;  // Scale 0-3 to 0-255
+				uint8_t g_val = top->VGA_G * 0x55;
+				uint8_t b_val = top->VGA_B * 0x55;
+				
+				colour = 0xFF000000 | (b_val << 16) | (g_val << 8) | r_val;
+				
 				video.Clock(top->VGA_HB, top->VGA_VB,
 				            top->VGA_HS, top->VGA_VS, colour);
 			}
@@ -265,7 +270,7 @@ int main(int argc, char** argv, char** env) {
 	if (video.Initialise(windowTitle) == 1) { return 1; }
 
 	// Example downloads
-	bus.QueueDownload("./boot.rom", 0, true);
+	bus.QueueDownload("./diagnostics.rom", 0, true);
 
 #ifdef WIN32
 	MSG msg;
@@ -339,12 +344,8 @@ int main(int argc, char** argv, char** env) {
 		ImGui::SetWindowPos("Memory Editor", ImVec2(0, 160), ImGuiCond_Once);
 		ImGui::SetWindowSize("Memory Editor", ImVec2(500, 200), ImGuiCond_Once);
 		if (ImGui::BeginTabBar("##memory_editor")) {
-			if (ImGui::BeginTabItem("MAIN ROM (64K)")) {
-				mem_edit.DrawContents(&top->top__DOT__memory__DOT__mem[0], 65536, 0); // 64K
-				ImGui::EndTabItem();
-			}
-			if (ImGui::BeginTabItem("MAIN RAM (64K)")) {
-				mem_edit.DrawContents(&top->top__DOT__memory__DOT__mem[0], 65536, 0); // 64K
+			if (ImGui::BeginTabItem("RAM (8MB)")) {
+				mem_edit.DrawContents(&top->top__DOT__sdram__DOT__ram[0], 8388608, 0); // 64K
 				ImGui::EndTabItem();
 			}
 			ImGui::EndTabBar();

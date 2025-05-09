@@ -1,8 +1,8 @@
-# Makefile for Full Amstrad testbench simulation
+# Makefile for Amstrad Wrapper testbench simulation
 
 # Directories
-BUILD_DIR = build
-LOGS_DIR = logs
+BUILD_DIR = build_wrapper
+LOGS_DIR = logs_wrapper
 RTL_DIR = ../../../rtl
 ROOT_DIR = ../../..
 GX4000_DIR = $(RTL_DIR)/GX4000
@@ -11,15 +11,19 @@ U765_DIR = $(RTL_DIR)/u765
 PLL_DIR = $(RTL_DIR)/pll
 PLAYCITY_DIR = $(RTL_DIR)/playcity
 
+# OSS CAD Suite path
+OSS_CAD_SUITE = $(HOME)/os/oss-cad-suite
+BIN_DIR = $(OSS_CAD_SUITE)/bin
+
 # Files
-TESTBENCH = tb_amstrad_full
+TESTBENCH = tb_amstrad_wrapper
 TOP_SV = $(ROOT_DIR)/Amstrad.sv
-TOP_MODULE = emu
+TOP_MODULE = Amstrad
 
 # Commands
-IVERILOG = iverilog
-VVP = vvp
-GTKWAVE = gtkwave
+IVERILOG = $(BIN_DIR)/iverilog
+VVP = $(BIN_DIR)/vvp
+GTKWAVE = $(BIN_DIR)/gtkwave
 
 # Include all necessary files
 INCLUDE_DIRS = \
@@ -32,7 +36,7 @@ INCLUDE_DIRS = \
 	-I$(PLAYCITY_DIR)
 
 # Flags
-IVERILOG_FLAGS = -g2012 -Wall -DSTUB_MODULES $(INCLUDE_DIRS)
+IVERILOG_FLAGS = -g2012 -Wall -D__ICARUS__ $(INCLUDE_DIRS)
 
 # Source files
 SRC_FILES = \
@@ -58,7 +62,7 @@ prepare:
 	@mkdir -p $(LOGS_DIR)
 
 compile:
-	@echo "Compiling simulation..."
+	@echo "Compiling wrapper simulation..."
 	@echo "Using top-level file: $(TOP_SV)"
 	@$(IVERILOG) $(IVERILOG_FLAGS) -o $(BUILD_DIR)/$(TESTBENCH).vvp \
 	        -s $(TESTBENCH) $(SRC_FILES) $(RTL_FILES) \
@@ -66,14 +70,14 @@ compile:
 	@echo "Compilation successful!"
 
 simulate:
-	@echo "Running simulation..."
+	@echo "Running wrapper simulation..."
 	@$(VVP) $(BUILD_DIR)/$(TESTBENCH).vvp -vcd | tee $(LOGS_DIR)/simulation.log \
 	        || (echo "Simulation failed!"; exit 1)
 	@echo "Simulation completed successfully!"
 	@echo "Results are in $(LOGS_DIR)/simulation.log"
 
 wave:
-	@$(GTKWAVE) $(BUILD_DIR)/$(TESTBENCH).vcd &
+	@$(GTKWAVE) $(BUILD_DIR)/amstrad_wrapper.vcd &
 
 clean:
 	@rm -rf $(BUILD_DIR) $(LOGS_DIR)

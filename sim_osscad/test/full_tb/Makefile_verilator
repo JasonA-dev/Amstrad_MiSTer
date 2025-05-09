@@ -1,0 +1,75 @@
+# Verilator Makefile for Amstrad testbench
+
+# Directories
+BUILD_DIR = build_verilator
+LOGS_DIR = logs_verilator
+RTL_DIR = ../../../rtl
+ROOT_DIR = ../../..
+GX4000_DIR = $(RTL_DIR)/GX4000
+T80_DIR = $(RTL_DIR)/T80
+U765_DIR = $(RTL_DIR)/u765
+PLL_DIR = $(RTL_DIR)/pll
+PLAYCITY_DIR = $(RTL_DIR)/playcity
+
+# OSS CAD Suite path
+OSS_CAD_SUITE = $(HOME)/os/oss-cad-suite
+BIN_DIR = $(OSS_CAD_SUITE)/bin
+
+# Files
+TOP_SV = $(ROOT_DIR)/Amstrad.sv
+TOP_MODULE = Amstrad
+TB_CPP = amstrad_verilator_tb.cpp
+
+# Commands
+VERILATOR = $(BIN_DIR)/verilator
+TRACE_PLAYER = $(BIN_DIR)/gtkwave
+
+# Include paths for Verilator
+VINCLUDES = -I$(ROOT_DIR) -I$(RTL_DIR) -I$(GX4000_DIR) -I$(T80_DIR) -I$(U765_DIR) -I$(PLL_DIR) -I$(PLAYCITY_DIR)
+
+# Verilator flags
+VFLAGS = --cc --trace --trace-depth 10 --trace-params --trace-structs --trace-underscore \
+         --lint-only \
+         --error-limit 100 \
+         --timescale 1ns/1ps \
+         $(VINCLUDES) \
+         --top-module $(TOP_MODULE)
+
+# Source files
+TOP_FILES = $(TOP_SV)
+TB_FILES = $(TB_CPP)
+
+# Targets
+all: clean prepare verilate
+
+prepare:
+	@mkdir -p $(BUILD_DIR)
+	@mkdir -p $(LOGS_DIR)
+
+verilate:
+	@echo "Verilating $(TOP_MODULE)..."
+	@echo "Using top-level file: $(TOP_SV)"
+	@cd $(BUILD_DIR) && $(VERILATOR) $(VFLAGS) $(TOP_FILES) | tee ../$(LOGS_DIR)/verilator.log
+	@echo "Verilator lint-only check completed"
+
+build:
+	@echo "Building simulation..."
+	@cd $(BUILD_DIR) && $(VERILATOR) $(VFLAGS) --exe $(TB_CPP) $(TOP_FILES)
+	@cd $(BUILD_DIR) && make -j -f V$(TOP_MODULE).mk
+	@echo "Build completed"
+
+simulate:
+	@echo "Running simulation..."
+	@cd $(BUILD_DIR) && ./V$(TOP_MODULE) | tee ../$(LOGS_DIR)/simulation.log
+	@echo "Simulation completed"
+
+wave:
+	@$(TRACE_PLAYER) $(BUILD_DIR)/amstrad_trace.vcd &
+
+clean:
+	@rm -rf $(BUILD_DIR)
+	@rm -rf $(LOGS_DIR)
+	@rm -f *.log
+	@echo "Clean completed"
+
+.PHONY: all prepare verilate build simulate wave clean 

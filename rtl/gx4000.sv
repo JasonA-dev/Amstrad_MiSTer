@@ -2,8 +2,9 @@ module GX4000
 (
     input         clk_sys,
     input         reset,
-    input         gx4000_mode,
-    input         plus_mode,
+    input         gx4000_mode,    // GX4000 mode compatibility input
+    input         plus_mode,      // Plus mode input
+    input         use_asic,       // Control whether to use the ASIC for video processing
     
     // CPU interface
     input  [15:0] cpu_addr,
@@ -43,6 +44,7 @@ module GX4000
     input  [24:0] ioctl_addr,
     input   [7:0] ioctl_dout,
     input         ioctl_download,
+    input   [7:0] ioctl_index,   // Added index to distinguish between file types
     
     // Status outputs
     output  [7:0] rom_type,
@@ -55,23 +57,15 @@ module GX4000
     output  [7:0] asic_status,
     output  [7:0] audio_status,
     
-    // Video source selection
-    input         use_asic,
-    
-    // Debug features
-    input         force_unlock   // Force ASIC unlock
+    // Plus-specific outputs
+    output        plus_bios_valid
 );
 
+    // Combine both inputs for a unified Plus mode 
+    wire active_plus_mode = gx4000_mode | plus_mode;
+
     // Internal signals
-    wire [7:0] sprite_pixel;
-    wire       sprite_active;
-    wire [3:0] sprite_id;
-    wire       sprite_collision;
-    wire [7:0] sprite_movement;
     wire [7:0] io_dout;
-    wire [7:0] collision_reg;
-    wire [7:0] config_reg;
-    wire [7:0] cpu_data_out;
     wire [22:0] rom_addr;
     wire [7:0] rom_data;
     wire       rom_wr;
@@ -79,31 +73,24 @@ module GX4000
     wire [7:0] rom_q;
     wire       auto_boot;
     wire [15:0] boot_addr;
-
-    // ROM module instance
-    GX4000_rom rom_inst
-    (
-        .clk_sys(clk_sys),
-        .reset(reset),
-        .file_wr(ioctl_wr),
-        .file_addr(ioctl_addr),
-        .file_data(ioctl_dout),
-        .file_load(ioctl_download),
-        .rom_type(rom_type),
-        .rom_size(rom_size),
-        .rom_checksum(rom_checksum),
-        .rom_version(rom_version),
-        .rom_date(rom_date),
-        .rom_title(rom_title)
-    );
-
+    wire [15:0] plus_bios_checksum;
+    wire [7:0]  plus_bios_version;
+    
+    // Cartridge control signals
+    wire       cart_rd = 1'b0;  // Fixed implicit net - set to 0 as it's only an input to cart_inst
+    
+    // Sprite-related signals from video module
+    wire [3:0] sprite_id;
+    wire       sprite_active;
+    wire [7:0] collision_reg;
+    
     // I/O module instance
     GX4000_io io_inst
     (
         .clk_sys(clk_sys),
         .reset(reset),
-        .gx4000_mode(gx4000_mode),
-        .plus_mode(plus_mode),
+        .gx4000_mode(active_plus_mode),
+        .plus_mode(active_plus_mode),
         .cpu_addr(cpu_addr),
         .cpu_data(cpu_data),
         .cpu_wr(cpu_wr),
@@ -114,95 +101,56 @@ module GX4000
         .joy_swap(joy_swap)
     );
 
-    // Joystick module instance
-    GX4000_joystick joystick_inst
-    (
-        .clk_sys(clk_sys),
-        .reset(reset),
-        .gx4000_mode(gx4000_mode),
-        .plus_mode(plus_mode),
-        .joy1(joy1),
-        .joy2(joy2),
-        .cpu_addr(cpu_addr),
-        .cpu_data(cpu_data_out),
-        .cpu_rd(cpu_rd),
-        .joy_swap(joy_swap)
-    );
-
-    // Memory module instance
-    GX4000_memory memory_inst
-    (
-        .clk_sys(clk_sys),
-        .reset(reset),
-        .gx4000_mode(gx4000_mode),
-        .plus_mode(plus_mode),
-        .cpu_addr(cpu_addr),
-        .cpu_data(cpu_data),
-        .cpu_wr(cpu_wr),
-        .cpu_rd(cpu_rd),
-        .mem_addr(rom_addr),
-        .mem_data(rom_data),
-        .mem_wr(rom_wr),
-        .mem_rd(rom_rd),
-        .mem_q(rom_q),
-        .cart_download(cart_download),
-        .cart_addr(cart_addr),
-        .cart_data(cart_data),
-        .cart_wr(cart_wr)
-    );
-
-    // Video module instance
+    // Video module instance (with integrated sprite handling)
     GX4000_video video_inst
     (
         .clk_sys(clk_sys),
         .reset(reset),
-        .gx4000_mode(gx4000_mode),
-        .plus_mode(plus_mode),
+        .gx4000_mode(active_plus_mode & use_asic),
+        .plus_mode(active_plus_mode & use_asic),
+        
+        // CPU interface
         .cpu_addr(cpu_addr),
         .cpu_data(cpu_data),
         .cpu_wr(cpu_wr),
         .cpu_rd(cpu_rd),
+        
+        // Video input
         .r_in(r_in),
         .g_in(g_in),
         .b_in(b_in),
         .hblank(hblank),
         .vblank(vblank),
-        .r_out(video_r_out),
-        .g_out(video_g_out),
-        .b_out(video_b_out),
-        .sprite_pixel(sprite_pixel),
+        
+        // Video output
+        .r_out(r_out),
+        .g_out(g_out),
+        .b_out(b_out),
+        
+        // Sprite interface outputs (for audio module)
         .sprite_active(sprite_active),
         .sprite_id(sprite_id),
-        .collision_reg(collision_reg),
-        .config_reg(config_reg)
+        .collision_reg(collision_reg)
     );
 
-    // ASIC module instance
-    GX4000_ASIC asic_inst
+    // Advanced Cartridge Interface Device (ACID) module instance
+    GX4000_ACID acid_inst
     (
         .clk_sys(clk_sys),
         .reset(reset),
-        .gx4000_mode(gx4000_mode),
-        .plus_mode(plus_mode),
-        .r_in(r_in),
-        .g_in(g_in),
-        .b_in(b_in),
-        .hblank(hblank),
-        .vblank(vblank),
-        .r_out(asic_r_out),
-        .g_out(asic_g_out),
-        .b_out(asic_b_out),
+        .gx4000_mode(active_plus_mode & use_asic),
+        .plus_mode(active_plus_mode & use_asic),
         .cpu_addr(cpu_addr),
         .cpu_data_in(cpu_data),
         .cpu_wr(cpu_wr),
         .cpu_rd(cpu_rd),
+        .cpu_data_out(),
         .cart_download(cart_download),
         .cart_addr(cart_addr),
         .cart_data(cart_data),
         .cart_wr(cart_wr),
         .asic_valid(asic_valid),
-        .asic_status(asic_status),
-        .force_unlock(force_unlock)
+        .asic_status(asic_status)
     );
 
     // Audio module instance
@@ -210,17 +158,17 @@ module GX4000
     (
         .clk_sys(clk_sys),
         .reset(reset),
-        .gx4000_mode(gx4000_mode),
-        .plus_mode(plus_mode),
+        .gx4000_mode(active_plus_mode & use_asic),
+        .plus_mode(active_plus_mode & use_asic),
         .cpu_addr(cpu_addr),
         .cpu_data(cpu_data),
         .cpu_wr(cpu_wr),
         .cpu_rd(cpu_rd),
         .cpc_audio_l(cpc_audio_l),
         .cpc_audio_r(cpc_audio_r),
-        .sprite_id(sprite_id),
-        .sprite_collision(sprite_collision),
-        .sprite_movement(sprite_movement),
+        .sprite_id(sprite_id),                 // Connect to sprite signals from video module
+        .sprite_collision(sprite_active),      // Use sprite_active as collision signal
+        .sprite_movement(collision_reg),       // Use collision register
         .hblank(hblank),
         .vblank(vblank),
         .audio_l(audio_l),
@@ -228,32 +176,13 @@ module GX4000
         .audio_status(audio_status)
     );
 
-    // Sprite module instance
-    GX4000_sprite sprite_inst
-    (
-        .clk_sys(clk_sys),
-        .reset(reset),
-        .gx4000_mode(gx4000_mode),
-        .plus_mode(plus_mode),
-        .cpu_addr(cpu_addr),
-        .cpu_data(cpu_data),
-        .cpu_wr(cpu_wr),
-        .cpu_rd(cpu_rd),
-        .hpos(hpos),
-        .vpos(vpos),
-        .hblank(hblank),
-        .vblank(vblank),
-        .sprite_pixel(sprite_pixel),
-        .sprite_active(sprite_active)
-    );
-
-    // Cartridge module instance
+    // Consolidated cartridge module instance
     GX4000_cartridge cart_inst
     (
         .clk_sys(clk_sys),
         .reset(reset),
-        .gx4000_mode(gx4000_mode),
-        .plus_mode(plus_mode),
+        .gx4000_mode(active_plus_mode),
+        .plus_mode(active_plus_mode),
         .cart_addr(cart_addr),
         .cart_data(cart_data),
         .cart_rd(cart_rd),
@@ -262,21 +191,25 @@ module GX4000
         .ioctl_addr(ioctl_addr),
         .ioctl_dout(ioctl_dout),
         .ioctl_download(ioctl_download),
+        .ioctl_index(ioctl_index),
         .rom_addr(rom_addr),
         .rom_data(rom_data),
         .rom_wr(rom_wr),
         .rom_rd(rom_rd),
         .rom_q(rom_q),
         .auto_boot(auto_boot),
-        .boot_addr(boot_addr)
+        .boot_addr(boot_addr),
+        // Cartridge information outputs
+        .rom_type(rom_type),
+        .rom_size(rom_size),
+        .rom_checksum(rom_checksum),
+        .rom_version(rom_version),
+        .rom_date(rom_date),
+        .rom_title(rom_title),
+        // Plus-specific outputs - now used for any cartridge validation
+        .plus_bios_valid(plus_bios_valid),
+        .plus_bios_checksum(plus_bios_checksum),
+        .plus_bios_version(plus_bios_version)
     );
-
-    // Video output multiplexing
-    wire [1:0] video_r_out, video_g_out, video_b_out;
-    wire [1:0] asic_r_out, asic_g_out, asic_b_out;
-
-    assign r_out = use_asic ? asic_r_out : video_r_out;
-    assign g_out = use_asic ? asic_g_out : video_g_out;
-    assign b_out = use_asic ? asic_b_out : video_b_out;
 
 endmodule 

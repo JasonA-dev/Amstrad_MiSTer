@@ -202,9 +202,8 @@ localparam CONF_STR = {
 	"FC3,E??,Load expansion;",
 	"-;",
 	"F4,CDT,Load tape;",
-	"F5,CPR,Load GX4000 CPR;",
-	"F6,BIN,Load GX4000 BIN;",
-	"F7,CPR,Load 6128Plus CPR;",
+	"F5,CPR,Load CPR;",
+	"F6,BIN,Load BIN;",
 	"-;",
 	"OK,Tape sound,Disabled,Enabled;",
 	"-;",
@@ -238,8 +237,7 @@ localparam CONF_STR = {
 	"P2-;",
 	"P2O5,Distributor,Amstrad,Schneider;",
 	"P2O4,Model,CPC 6128,CPC 664;",
-	"P2OW,GX4000 mode,Disabled,Enabled;",
-	"P2OX,6128Plus mode,Disabled,Enabled;",
+	"P2OL,Plus Mode,Disabled,Enabled;",
 	"P2OV,Tape progressbar,Off,On;",
 
 	"-;",
@@ -255,8 +253,7 @@ wire locked;
 wire st_right_shift_mod = status[22];
 wire st_keypad_mod = status[23];
 wire st_progressbar = status[31];
-wire gx4000_mode = status[32];
-wire plus_mode = status[33];
+wire plus_mode = status[21];
 
 pll pll
 (
@@ -267,9 +264,9 @@ pll pll
 
 reg ce_ref, ce_u765;
 reg ce_16;
-always @(posedge clk_sys) begin
-	reg [2:0] div = 0;
+reg [2:0] div;
 
+always @(posedge clk_sys) begin
 	div     <= div + 1'd1;
 
 	ce_ref  <= !div;
@@ -279,13 +276,13 @@ end
 
 //////////////////////////////////////////////////////////////////////////
 
-wire [31:0] sd_lba;
+wire [31:0] sd_lba[2];     // Array with 2 elements (VDNUM=2 in hps_io instantiation)
 wire  [1:0] sd_rd;
 wire  [1:0] sd_wr;
 wire  [1:0] sd_ack;
 wire  [8:0] sd_buff_addr;
 wire  [7:0] sd_buff_dout;
-wire  [7:0] sd_buff_din;
+wire  [7:0] sd_buff_din[2]; // Array with 2 elements 
 wire        sd_buff_wr;
 wire  [1:0] img_mounted;
 wire [63:0] img_size;
@@ -307,10 +304,6 @@ wire  [6:0] joy1;
 wire  [6:0] joy2;
 wire [63:0] status;
 
-// Default values for status_in and status_set
-wire [63:0] status_in = status;
-wire        status_set = Fn[1];
-
 wire        forced_scandoubler;
 wire [21:0] gamma_bus;
 
@@ -322,13 +315,13 @@ hps_io #(.CONF_STR(CONF_STR), .VDNUM(2)) hps_io
 	.img_mounted(img_mounted),
 	.img_size(img_size),
 	.img_readonly(img_readonly),
-	.sd_lba('{sd_lba,sd_lba}),
+	.sd_lba('{sd_lba[0], sd_lba[1]}),
 	.sd_rd(sd_rd),
 	.sd_wr(sd_wr),
 	.sd_ack(sd_ack),
 	.sd_buff_addr(sd_buff_addr),
 	.sd_buff_dout(sd_buff_dout),
-	.sd_buff_din('{sd_buff_din,sd_buff_din}),
+	.sd_buff_din('{sd_buff_din[0], sd_buff_din[1]}),
 	.sd_buff_wr(sd_buff_wr),
 
 	.ps2_key(ps2_key),
@@ -338,9 +331,10 @@ hps_io #(.CONF_STR(CONF_STR), .VDNUM(2)) hps_io
 	.joystick_1(joy2),
 
 	.buttons(buttons),
+
 	.status(status),
-	.status_in(status_in),
-	.status_set(status_set),
+	.status_in({status[31:21],~status[20],status[19:0]}),
+	.status_set(Fn[1]),
 	.status_menumask({en270p,1'b0}),
 
 	.forced_scandoubler(forced_scandoubler),
@@ -357,16 +351,14 @@ hps_io #(.CONF_STR(CONF_STR), .VDNUM(2)) hps_io
 
 wire        rom_download = ioctl_download && (ioctl_index[4:0] < 4);
 wire        tape_download = ioctl_download && (ioctl_index == 4);
-wire        gx4000_cpr_download = ioctl_download && (ioctl_index == 5);  // F5 - CPR files
-wire        gx4000_bin_download = ioctl_download && (ioctl_index == 6);  // F6 - BIN files
-wire        gx4000_download = gx4000_cpr_download | gx4000_bin_download;
-wire        plus_rom_download = ioctl_download && (ioctl_index == 7);    // F7 - 6128Plus CPR
+wire        plus_cpr_download = ioctl_download && (ioctl_index == 5);  // F5 - CPR files
+wire        plus_bin_download = ioctl_download && (ioctl_index == 6);  // F6 - BIN files
+wire        plus_download = plus_cpr_download | plus_bin_download;
 
 // A 8MB bank is split to 2 halves
 // First 4 MB is OS ROM + RAM pages + MF2 ROM
 // Second 4 MB is max. 256 pages of HI rom
-// GX4000 cartridges are loaded into the second half
-// 6128Plus CPR is loaded into a dedicated area
+// Plus ROMs are loaded into the second half
 
 reg         boot_wr = 0;
 reg  [22:0] boot_a;
@@ -375,30 +367,25 @@ reg   [7:0] boot_dout;
 
 reg [255:0] rom_map = '0;
 reg         plus_rom_loaded = 0;
+wire        plus_valid;
 
 reg         romdl_wait = 0;
-always @(posedge clk_sys) begin
-	reg [8:0] page = 0;
-	reg       combo = 0;
-	reg       old_download;
+reg [8:0] page;
+reg       combo;
+reg       old_download;
 
-	if((rom_download | gx4000_download | plus_rom_download) & ioctl_wr) begin
+always @(posedge clk_sys) begin
+	if((rom_download | plus_download) & ioctl_wr) begin
 		romdl_wait <= 1;
 		boot_dout <= ioctl_dout;
 		boot_a[13:0] <= ioctl_addr[13:0];
 
 		if(ioctl_index) begin
-			if (plus_rom_download) begin
-				// 6128Plus CPR is loaded into a dedicated area
-				boot_a[22]    <= 1'b1;   // Use second half of memory
-				boot_a[21:14] <= 8'hF0;  // Dedicated 6128Plus CPR area
-				boot_bank     <= 1'b0;   // Always use bank 0 for 6128Plus CPR
-				plus_rom_loaded <= 1;    // Mark 6128Plus CPR as loaded
-			end else if (gx4000_download) begin
-				// GX4000 cartridges are loaded into the second half of memory
+			if (plus_download) begin
+				// Plus ROM is loaded into dedicated area in the second half of memory
 				boot_a[22]    <= 1'b1;   // Use second half of memory
 				boot_a[21:14] <= ioctl_addr[21:14];  // Use file address directly
-				boot_bank     <= 1'b0;   // Always use bank 0 for GX4000
+				boot_bank     <= 1'b0;   // Always use bank 0 for Plus ROMs
 			end else begin
 				boot_a[22]    <= page[8];
 				boot_a[21:14] <= page[7:0] + ioctl_addr[21:14];
@@ -439,10 +426,10 @@ always @(posedge clk_sys) begin
 	end
 
 	old_download <= ioctl_download;
-	if(~old_download & ioctl_download & (rom_download | gx4000_download | plus_rom_download)) begin
+	if(~old_download & ioctl_download & (rom_download | plus_download)) begin
 		if(ioctl_index) begin
-			if (gx4000_download) begin
-				// For GX4000 files, use the file address directly
+			if (plus_download) begin
+				// For cartridge files, use the file address directly
 				page <= ioctl_addr[21:14];
 				combo <= 0;
 			end else begin
@@ -456,6 +443,14 @@ always @(posedge clk_sys) begin
 				if(ioctl_file_ext[15:0] == "Z0") begin page <= 0; combo <= 1; end
 			end
 		end
+	end
+	
+	// Update Plus ROM loaded status
+	if(~old_download & plus_download) begin
+		plus_rom_loaded <= 0; // Reset when starting download
+	end
+	else if(~ioctl_download & plus_download & plus_valid) begin
+		plus_rom_loaded <= 1; // Set only when valid Plus ROM is loaded
 	end
 end
 
@@ -635,13 +630,13 @@ u765 u765
 	.img_mounted(img_mounted),
 	.img_size(img_size[31:0]),
 	.img_wp(img_readonly),
-	.sd_lba(sd_lba),
+	.sd_lba(sd_lba[0]),
 	.sd_rd(sd_rd),
 	.sd_wr(sd_wr),
 	.sd_ack(|sd_ack),
 	.sd_buff_addr(sd_buff_addr),
 	.sd_buff_dout(sd_buff_dout),
-	.sd_buff_din(sd_buff_din),
+	.sd_buff_din(sd_buff_din[0]),
 	.sd_buff_wr(sd_buff_wr)
 );
 
@@ -811,6 +806,7 @@ wire        IRQ = ~playcity_int_n;
 
 wire io_rd = rd & iorq;
 wire io_wr = wr & iorq;
+wire  [7:0] audio_l, audio_r;
 
 Amstrad_motherboard motherboard
 (
@@ -827,6 +823,9 @@ Amstrad_motherboard motherboard
 	.ppi_jumpers({2'b11, ~status[5], 1'b1}),
 	.crtc_type(~status[2]),
 	.sync_filter(1),
+	.gx4000_mode(plus_mode),
+	.plus_mode(plus_mode),
+	.plus_rom_loaded(plus_rom_loaded),
 
 	.joy1(status[18] ? joy2 : joy1),
 	.joy2(status[18] ? joy1 : joy2),
@@ -875,20 +874,16 @@ Amstrad_motherboard motherboard
 	.key_reset(key_reset)
 );
 
-// Internal signals for GX4000
-wire [1:0] gx4000_r, gx4000_g, gx4000_b;
-wire [7:0] gx4000_audio_l, gx4000_audio_r;
+// Internal signals for Plus mode output
+wire [1:0] plus_r, plus_g, plus_b;
+wire [7:0] plus_audio_l, plus_audio_r;
 
-// Internal signals for motherboard outputs
-wire [1:0] mb_r, mb_g, mb_b;
-wire [7:0] mb_audio_l, mb_audio_r;
-
-// GX4000 instance
-GX4000 gx4000_inst
+// GX4000 instance (now handles all Plus mode functionality)
+GX4000 cart_inst
 (
     .clk_sys(clk_sys),
     .reset(reset),
-    .gx4000_mode(gx4000_mode),
+    .gx4000_mode(plus_mode),
     .plus_mode(plus_mode),
     
     // CPU interface
@@ -898,20 +893,20 @@ GX4000 gx4000_inst
     .cpu_rd(rd),
     
     // Video interface
-    .r_in(mb_r),
-    .g_in(mb_g),
-    .b_in(mb_b),
+    .r_in(r),
+    .g_in(g),
+    .b_in(b),
     .hblank(hbl),
     .vblank(vbl),
-    .r_out(gx4000_r),
-    .g_out(gx4000_g),
-    .b_out(gx4000_b),
+    .r_out(plus_r),
+    .g_out(plus_g),
+    .b_out(plus_b),
     
     // Audio interface
-    .cpc_audio_l(mb_audio_l),
-    .cpc_audio_r(mb_audio_r),
-    .audio_l(gx4000_audio_l),
-    .audio_r(gx4000_audio_r),
+    .cpc_audio_l(audio_l),
+    .cpc_audio_r(audio_r),
+    .audio_l(plus_audio_l),
+    .audio_r(plus_audio_r),
     
     // Joystick interface
     .joy1(joy1),
@@ -929,6 +924,7 @@ GX4000 gx4000_inst
     .ioctl_addr(ioctl_addr),
     .ioctl_dout(ioctl_dout),
     .ioctl_download(ioctl_download),
+    .ioctl_index(ioctl_index),
     
     // Status outputs
     .rom_type(),
@@ -941,24 +937,22 @@ GX4000 gx4000_inst
     .asic_status(),
     .audio_status(),
     
-    // Video source selection
-    .use_asic(1'b0),  // Use video module by default
+    // Plus-specific outputs
+    .plus_bios_valid(plus_valid),
     
-    // Debug features
-    .force_unlock(1'b0)        // Disable force unlock by default
+    // Video source selection - enable ASIC in Plus mode unless disabled by user
+    .use_asic(plus_mode)
 );
 
 // Connect motherboard outputs to intermediate signals
-assign mb_r = r;
-assign mb_g = g;
-assign mb_b = b;
-assign mb_audio_l = audio_l;
-assign mb_audio_r = audio_r;
+wire [1:0] mb_r = r;
+wire [1:0] mb_g = g;
+wire [1:0] mb_b = b;
 
 // Final video outputs
-wire [1:0] final_r = gx4000_mode ? gx4000_r : mb_r;
-wire [1:0] final_g = gx4000_mode ? gx4000_g : mb_g;
-wire [1:0] final_b = gx4000_mode ? gx4000_b : mb_b;
+wire [1:0] final_r = plus_mode ? plus_r : mb_r;
+wire [1:0] final_g = plus_mode ? plus_g : mb_g;
+wire [1:0] final_b = plus_mode ? plus_b : mb_b;
 
 // Connect final outputs to color_mix inputs
 wire [7:0] R_in = {final_r, final_r, final_r, final_r};  // Expand 2-bit to 8-bit
@@ -966,8 +960,8 @@ wire [7:0] G_in = {final_g, final_g, final_g, final_g};  // Expand 2-bit to 8-bi
 wire [7:0] B_in = {final_b, final_b, final_b, final_b};  // Expand 2-bit to 8-bit
 
 // Audio mixing logic
-wire [8:0] audio_sys_l = audio_l + {tape_rec, 1'b0, tape_play & status[20], 3'd0} + (gx4000_mode ? gx4000_audio_l : 8'd0);
-wire [8:0] audio_sys_r = audio_r + {tape_rec, 1'b0, tape_play & status[20], 3'd0} + (gx4000_mode ? gx4000_audio_r : 8'd0);
+wire [8:0] audio_sys_l = audio_l + {tape_rec, 1'b0, tape_play & status[20], 3'd0} + (plus_mode ? plus_audio_l : 8'd0);
+wire [8:0] audio_sys_r = audio_r + {tape_rec, 1'b0, tape_play & status[20], 3'd0} + (plus_mode ? plus_audio_r : 8'd0);
 
 assign AUDIO_S   = 0;
 assign AUDIO_MIX = status[8:7];
@@ -1023,9 +1017,9 @@ color_mix color_mix
 	.VSync_in(vs),
 	.HBlank_in(hbl),
 	.VBlank_in(vbl),
-	.B_in(b),
-	.G_in(g),
-	.R_in(r),
+	.B_in(B_in),
+	.G_in(G_in),
+	.R_in(R_in),
 
 	.HSync_out(HSync),
 	.VSync_out(VSync),
@@ -1055,9 +1049,9 @@ end
 video_mixer #(.LINE_LENGTH(800), .GAMMA(1)) video_mixer
 (
 	.*,
-	.R(R_in),
-	.G(G_in),
-	.B(B_in),
+	.R(R[7:0] | {8{progress_pix}}),
+	.G(G[7:0] | {8{progress_pix}}),
+	.B(B[7:0] | {8{progress_pix}}),
 	.VGA_DE(vga_de),
 	.freeze_sync(),
 	.scandoubler((scale || forced_scandoubler) && !interlace)

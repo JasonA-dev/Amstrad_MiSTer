@@ -692,7 +692,7 @@ always @(posedge clk_sys) begin : fdc
 				tinfo_lock <= 0;
 				i_secinfo_valid[sector_search_ds0][sector_search_hds] <= 1;
 				i_current_sector_pos[sector_search_ds0][sector_search_hds] <= i_next_sector_pos[sector_search_ds0][sector_search_hds];
-				sector_end_pos[sector_search_ds0][sector_search_hds] <= SECTOR_SIZE(sector_n[sector_search_ds0][sector_search_hds], sector_length[sector_search_ds0][sector_search_hds]) + SECTOR_EXTRA_DATA_LEN - 1;
+				sector_end_pos[sector_search_ds0][sector_search_hds] <= (SECTOR_SIZE(sector_n[sector_search_ds0][sector_search_hds], sector_length[sector_search_ds0][sector_search_hds]) + SECTOR_EXTRA_DATA_LEN - 1) & 17'h1FFFF;
 				sector_search_state <= 0;
 			end else if (i_current_sector == i_current_track_sectors[sector_search_ds0][sector_search_hds] - 1) begin
 				$display("sector no. %d not found!", i_next_sector_pos[sector_search_ds0][sector_search_hds]);
@@ -912,7 +912,7 @@ always @(posedge clk_sys) begin : fdc
 					status[1] <= 8'b101;
 					status[2] <= 0;
 					state <= COMMAND_READ_RESULTS;
-				end else	if (din[2] & ~image_sides[din[0]]) begin
+				end	else	if (din[2] & ~image_sides[din[0]]) begin
 					status[0] <= 8'h48; //no side B
 					status[1] <= 0;
 					status[2] <= 0;
@@ -1096,7 +1096,7 @@ always @(posedge clk_sys) begin : fdc
 			if (image_edsk[ds0] &&
 				(i_sector_size == { i_bytes_to_read, 1'b0 } || // 2 weak sectors
 				(i_sector_size == ({ i_bytes_to_read, 1'b0 } + i_bytes_to_read)) || // 3 weak sectors
-				(i_sector_size == { i_bytes_to_read, 2'b00 } ))) begin // 4 weak sectors
+				(i_sector_size == { i_bytes_to_read, 2'b00 } ))) begin
 				//if sector data == 2,3,4x sector size, then handle multiple version of the same sector (weak sectors)
 				//otherwise extra data is considered as GAP data
 				if (i_weak_sector != next_weak_sector[ds0]) begin
@@ -1284,7 +1284,7 @@ always @(posedge clk_sys) begin : fdc
 				status[1] <= 0;
 				status[2] <= 0;
 				state <= COMMAND_READ_RESULTS;
-			end else	if (~old_wr & wr & a0) begin
+			end	else	if (~old_wr & wr & a0) begin
 				i_c <= din;
 				state <= COMMAND_FORMAT_TRACK6;
 			end

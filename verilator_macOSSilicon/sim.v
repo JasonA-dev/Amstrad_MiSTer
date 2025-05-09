@@ -2,7 +2,6 @@
 
 module top (
     input  wire        clk_48,
-    //input  wire        clk_24,
     input reg          reset,
     input              inputs,
     
@@ -25,11 +24,14 @@ module top (
     input [7:0]  ioctl_dout,
     input [7:0]  ioctl_din,
     input [7:0]  ioctl_index,
-    output reg   ioctl_wait=1'b0
+    output reg   ioctl_wait
 );
 
-reg ce_pix = 1'b1;
+reg ce_pix;
 
+reg plus_rom_loaded = 0;
+reg plus_valid = 0;
+reg old_download = 0;
 //----------------------------------------------------------------
 // Keyboard logic (unchanged)
 reg         key_strobe;
@@ -52,6 +54,7 @@ always @(posedge clk_48) begin
 end
 //----------------------------------------------------------------
 
+// Clock dividers for different system components
 reg ce_ref, ce_u765;
 reg ce_16;
 reg [2:0] div;
@@ -64,6 +67,22 @@ always @(posedge clk_48) begin
 	ce_16   <= !div[1:0]; //16 MHz
 end
 
+// Generate pixel clock similar to the real implementation
+// But simplified for simulation
+reg [1:0] pixel_div;
+initial pixel_div = 0;
+
+always @(posedge clk_48) begin
+    if (ce_16) begin
+        pixel_div <= pixel_div + 1'd1;
+        // Generate ce_pix at 1/4 of ce_16 rate, more visible for simulation
+        ce_pix <= (pixel_div == 0);
+    end
+    else begin
+        ce_pix <= 0;
+    end
+end
+
 //----------------------------------------------------------------
 // Reset logic
 reg RESET = 1;
@@ -71,255 +90,283 @@ reg rom_loaded = 0;
 always @(posedge clk_48) begin
     reg ioctl_downlD;
     ioctl_downlD <= ioctl_download;
+    
+    // Only come out of reset when ROM download is complete
+    // rom_loaded is set when we detect the end of ioctl_download
     if (ioctl_downlD & ~ioctl_download) rom_loaded <= 1;
+    
+    // Stay in reset until ROM is loaded and user is not pressing reset
     RESET <= reset | ~rom_loaded;
 end
 //----------------------------------------------------------------
 
-
+// Memory loading logic - improved to match Amstrad.sv logic
 wire        rom_download = ioctl_download && (ioctl_index[4:0] < 4);
 wire        tape_download = ioctl_download && (ioctl_index == 4);
-
-// A 8MB bank is split to 2 halves
-// Fist 4 MB is OS ROM + RAM pages + MF2 ROM
-// Second 4 MB is max. 256 pages of HI rom
+wire        plus_cpr_download = ioctl_download && (ioctl_index == 5);  // F5 - CPR files
+wire        plus_bin_download = ioctl_download && (ioctl_index == 6);  // F6 - BIN files
+wire        plus_download = plus_cpr_download | plus_bin_download;
 
 reg         boot_wr = 0;
 reg  [22:0] boot_a;
 reg   [1:0] boot_bank;
 reg   [7:0] boot_dout;
-
 reg [255:0] rom_map = '0;
+reg [8:0]   page = 0;
+reg         combo = 0;
 
-reg         romdl_wait = 0;
-reg [8:0] page;
-reg       combo;
-
-initial begin
-    page <= 0;
-    combo <= 0;
-end
+// Define the ROM block addresses based on Amstrad.sv logic
+localparam ROM_OS_ADDR     = 9'h000; // OS (0,4)
+localparam ROM_BASIC_ADDR  = 9'h100; // BASIC (1,5)
+localparam ROM_AMSDOS_ADDR = 9'h107; // AMSDOS (2,6)
+localparam ROM_MF2_ADDR    = 9'h0ff; // MF2 (3,7)
 
 always @(posedge clk_48) begin
-    reg old_download;
+	if((rom_download | plus_download) & ioctl_wr) begin
+		boot_wr <= 1;
+		boot_dout <= ioctl_dout;
+		boot_a[13:0] <= ioctl_addr[13:0];
+				
+		if(ioctl_index) begin
+			if (plus_download) begin
+				// Plus ROM is loaded into dedicated area in the second half of memory
+				boot_a[22]    <= 1'b1;   // Use second half of memory
+				boot_a[21:14] <= ioctl_addr[21:14];  // Use file address directly
+				boot_bank     <= 1'b0;   // Always use bank 0 for Plus ROMs
+			end else begin
+				boot_a[22]    <= page[8];
+				boot_a[21:14] <= page[7:0] + ioctl_addr[21:14];
+				boot_bank     <= {1'b0, &ioctl_index[7:6]};
+			end
+		end
+		else begin
+			case(ioctl_addr[24:14])
+				0,4: boot_a[22:14] <= 9'h000; //OS
+				1,5: boot_a[22:14] <= 9'h100; //BASIC
+				2,6: boot_a[22:14] <= 9'h107; //AMSDOS
+				3,7: boot_a[22:14] <= 9'h0ff; //MF2
+				default: boot_wr <= 0;
+			endcase
 
-    if(rom_download & ioctl_wr) begin
-        romdl_wait <= 1;
-        boot_dout <= ioctl_dout;
-        boot_a[13:0] <= ioctl_addr[13:0];
+			case(ioctl_addr[24:14])
+				0,1,2,3: boot_bank <= 0; //CPC6128
+				4,5,6,7: boot_bank <= 1; //CPC664
+			endcase
+		end
+	end
+	else if(ce_ref && boot_wr) begin
+		boot_wr <= 0;
+		// load expansion ROM into both banks if manually loaded or boot name is boot.eXX
+		if((ioctl_index[7:6]==1 || ioctl_index[5:0]) && !boot_bank) begin
+			boot_bank <= 1;
+			boot_wr <= 1;
+		end
+		else begin
+			if(boot_a[22]) rom_map[boot_a[21:14]] <= 1;
+			if(combo && &boot_a[13:0]) begin
+				combo <= 0;
+				page  <= 9'h1FF;
+			end
+		end
+	end
 
-        if(ioctl_index) begin
-            boot_a[22]    <= page[8];
-            boot_a[21:14] <= page[7:0] + ioctl_addr[21:14];
-            boot_bank     <= {1'b0, &ioctl_index[7:6]};
-        end
-        else begin
-            case(ioctl_addr[24:14])
-                0,4: boot_a[22:14] <= 9'h000; //OS
-                1,5: boot_a[22:14] <= 9'h100; //BASIC
-                2,6: boot_a[22:14] <= 9'h107; //AMSDOS
-                3,7: boot_a[22:14] <= 9'h0ff; //MF2
-                default: romdl_wait <= 0;
-            endcase
-
-            case(ioctl_addr[24:14])
-                0,1,2,3: boot_bank <= 0; //CPC6128
-                4,5,6,7: boot_bank <= 1; //CPC664
-            endcase
-        end
-    end
-
-    if(rom_download) begin
-        if(ioctl_wr) begin
-            if(ioctl_addr == 0) begin
-                if(ioctl_index[7:6]==1) begin
-                    page <= 0;
-                    combo <= 0;
-                end
-                else if(ioctl_index[7:6]==2) begin
-                    page <= 9'h100;
-                    combo <= 0;
-                end
-                else if(ioctl_index[7:6]==3) begin
-                    page <= 9'h180;
-                    combo <= 0;
-                end
-                else if(ioctl_index[7:6]==0) begin
-                    page <= 9'h000;
-                    combo <= 1;
-                end
-            end
-            else begin
-                if(combo && &boot_a[13:0]) begin
-                    combo <= 0;
-                    page <= 9'h1FF;
-                end
-            end
-        end
-        else begin
-            if(boot_wr) begin
-                {boot_wr, romdl_wait} <= 0;
-                if(boot_a[22]) rom_map[boot_a[21:14]] <= 1;
-            end
-        end
-    end
-
-    old_download <= ioctl_download;
-    if(~old_download & ioctl_download & rom_download) begin
-        if(ioctl_index) begin
-            page <= 9'h1EE; // some unused page for malformed file extension
-            combo <= 0;
-        end
-    end
+	old_download <= ioctl_download;
+	if(~old_download & ioctl_download & (rom_download | plus_download)) begin
+		if(ioctl_index) begin
+			if (plus_download) begin
+				// For cartridge files, use the file address directly
+				page <= ioctl_addr[21:14];
+				combo <= 0;
+			end
+		end
+	end
+	
+	// Update Plus ROM loaded status
+	if(~old_download & plus_download) begin
+		plus_rom_loaded <= 0; // Reset when starting download
+	end
+	else if(~ioctl_download & plus_download & plus_valid) begin
+		plus_rom_loaded <= 1; // Set only when valid Plus ROM is loaded
+	end
 end
 
+// CPU and core signals
+wire [15:0] cpu_addr;
+wire [7:0]  cpu_dout;
+wire        mem_rd;
+wire        mem_wr;
+wire        iorq;
+wire        rd;
+wire        wr;
+wire        m1;
+wire        phi_n;
+wire        phi_en_n;
+wire        phi_en_p = 1'b1;  // Define as a wire with initial value
+wire        mreq = 1'b0;      // Define as a wire with initial value
+wire        tape_motor;
+wire        cursor;
+wire        key_nmi;
+wire        key_reset;
+wire [6:0]  joy1 = 7'h00;     // 7-bit signal as per module definition
+wire [6:0]  joy2 = 7'h00;     // 7-bit signal as per module definition
+wire [1:0]  mode = 0;
+wire        NMI = 0;
+wire        IRQ = 0;
+wire [9:0]  Fn = 10'h000;     // 10-bit signal as per module definition
 
-Amstrad_motherboard motherboard
-(
-	.reset(reset),
-	.clk(clk_48),
-	.ce_16(ce_16),
-
-	.right_shift_mod(st_right_shift_mod),
-	.keypad_mod(st_keypad_mod),
-	.ps2_key(ps2_key),
-	.Fn(Fn),
-
-	.no_wait(0 & ~tape_motor),
-	.ppi_jumpers({2'b11, 0, 1'b1}),
-	.crtc_type(0),
-	.sync_filter(1),
-
-	.joy1(joy1),
-	.joy2(joy2),
-
-	.tape_in(tape_play),
-	.tape_out(tape_rec),
-	.tape_motor(tape_motor),
-
-	.audio_l(audio_l),
-	.audio_r(audio_r),
-
-	.mode(mode),
-
-	.hblank(hbl),
-	.vblank(vbl),
-	.hsync(hs),
-	.vsync(vs),
-	.red(r),
-	.green(g),
-	.blue(b),
-	.field(VGA_F1),
-
-	.vram_din(vram_dout),
-	.vram_addr(vram_addr),
-
-	.rom_map(rom_map),
-	.ram64k(model),
-	.mem_rd(mem_rd),
-	.mem_wr(mem_wr),
-	.mem_addr(ram_a),
-
-	.phi_n(phi_n),
-	.phi_en_n(phi_en_n),
-	.cpu_addr(cpu_addr),
-	.cpu_dout(cpu_dout),
-	.cpu_din(cpu_din),
-	.iorq(iorq),
-	.rd(rd),
-	.wr(wr),
-	.m1(m1),
-	.nmi(NMI),
-	.irq(IRQ),
-	.cursor(cursor),
-
-	.key_nmi(key_nmi),
-	.key_reset(key_reset)
-);
+// Video signals
+wire        hbl;
+wire        vbl;
+wire        hs;
+wire        vs;
+wire [1:0]  r;
+wire [1:0]  g;
+wire [1:0]  b;
+wire        VGA_F1;
 
 // Memory interface signals
-wire [7:0] ram_dout;
+wire [7:0]  ram_dout;
 wire [22:0] ram_a;
-wire mem_wr;
-wire mem_rd;
+wire [7:0]  cpu_din = ram_dout;
 
 // Video memory interface signals
 wire [14:0] vram_addr;
 wire [15:0] vram_dout;
 
-// ROM memory interface signals
-wire [7:0] rom_dout;
-wire [7:0] rom_dout_b;
-wire [15:0] cpu_addr;
-wire [7:0] cpu_dout;
-wire [7:0] cpu_din;
+// Flag for setting model (0 for CPC6128, 1 for CPC464)
+reg model = 1;
 
-// Memory access control
-wire is_rom_access = (ram_a[15:14] == 2'b00);  // 0000-3FFF is ROM
-wire is_ram_access = (ram_a[15:14] != 2'b00);  // 4000-FFFF is RAM
-wire is_vram_access = (ram_a[15:14] == 2'b10); // 8000-BFFF is VRAM
+// Audio signals - not connected in verilator sim
+wire [7:0]  audio_l, audio_r;
 
-// CPU data input multiplexing
-wire [7:0] cpu_din = is_rom_access ? ram_dout : 
-                     is_ram_access ? ram_dout :
-                     is_vram_access ? ram_dout : 8'hFF;
+// Stub signals for unused components
+wire        tape_play = 0;
+wire        tape_rec;
+wire [7:0]  tape_dout = 8'h00;
+wire [22:0] tape_play_addr = 0;
+wire [22:0] tape_last_addr = 0;
+wire        tape_data_req = 0;
+wire        tape_data_ack = 0;
+wire [7:0]  tape_din = 8'h00;
+wire        tape_wr = 0;
+wire        tape_wr_ack = 0;
 
-// Video and audio signals from motherboard
-wire [1:0] cpc_r, cpc_g, cpc_b;
-wire [7:0] cpc_audio_l, cpc_audio_r;
+// Add back Amstrad motherboard instantiation
+Amstrad_motherboard motherboard
+(
+    .reset(RESET),
+    .clk(clk_48),
+    .ce_16(ce_16),
 
-// Video and audio signals from GX4000
-wire [1:0] gx4000_r, gx4000_g, gx4000_b;
-wire [7:0] gx4000_audio_l, gx4000_audio_r;
+    .joy1(joy1),
+    .joy2(joy2),
+    .right_shift_mod(1'b0),
+    .keypad_mod(1'b0),
+    .ps2_key(ps2_key),
+    .ps2_mouse(25'd0),
+    .key_nmi(key_nmi),
+    .key_reset(key_reset),
+    .Fn(Fn),
 
-// Mode selection
-reg gx4000_mode = 0;  // Default to CPC mode
+    .ppi_jumpers(4'd0),
+    .crtc_type(1'b0),
+    .sync_filter(1'b0),
+    .no_wait(1'b0),
+    .gx4000_mode(1'b0),
+    .plus_mode(1'b0),
+    .plus_rom_loaded(1'b0),
 
-// Connect motherboard outputs to intermediate signals
-assign cpc_r = r;
-assign cpc_g = g;
-assign cpc_b = b;
-assign cpc_audio_l = audio_l;
-assign cpc_audio_r = audio_r;
+    .tape_in(1'b0),
+    .tape_out(),
+    .tape_motor(tape_motor),
 
-// Combine video outputs based on mode
-assign r = gx4000_mode ? gx4000_r : cpc_r;
-assign g = gx4000_mode ? gx4000_g : cpc_g;
-assign b = gx4000_mode ? gx4000_b : cpc_b;
+    .audio_l(audio_l),
+    .audio_r(audio_r),
 
-// Combine audio outputs based on mode
-assign audio_l = gx4000_mode ? gx4000_audio_l : cpc_audio_l;
-assign audio_r = gx4000_mode ? gx4000_audio_r : cpc_audio_r;
+    .mode(mode),
 
-// Video signal assignments
-assign VGA_R = {r, r, r, r, r, r};  // Expand 2-bit to 6-bit
-assign VGA_G = {g, g, g, g, g, g};  // Expand 2-bit to 6-bit
-assign VGA_B = {b, b, b, b, b, b};  // Expand 2-bit to 6-bit
-assign VGA_HS = hs;
-assign VGA_VS = vs;
+    .red(r),
+    .green(g),
+    .blue(b),
+    .hblank(hbl),
+    .vblank(vbl),
+    .hsync(hs),
+    .vsync(vs),
+    .field(VGA_F1),
+
+    .vram_din(vram_dout),
+    .vram_addr(vram_addr),
+
+    .rom_map(rom_map),
+    .ram64k(model),
+    .mem_addr(ram_a),
+    .mem_rd(mem_rd),
+    .mem_wr(mem_wr),
+
+    .phi_n(phi_n),
+    .phi_en_n(phi_en_n),
+    .phi_en_p(phi_en_p),
+    .cpu_addr(cpu_addr),
+    .cpu_dout(cpu_dout),
+    .cpu_din(cpu_din),
+    .iorq(iorq),
+    .mreq(mreq),
+    .rd(rd),
+    .wr(wr),
+    .m1(m1),
+    .irq(IRQ),
+    .nmi(NMI),
+    .cursor(cursor)
+);
+
+// Video output conversion - expanding 2-bit color to 6-bit
+assign VGA_R = {r, r, r};
+assign VGA_G = {g, g, g};
+assign VGA_B = {b, b, b};
+assign VGA_HS = ~hs;  // Invert for VGA
+assign VGA_VS = ~vs;  // Invert for VGA
 assign VGA_HB = hbl;
 assign VGA_VB = vbl;
 
-// Instantiate single dpram for all memory
-dpram #(
-    .data_width_g(8),
-    .addr_width_g(14)
-) memory (
-    // Port A - CPU interface
-    .clock_a(clk_48),
-    .ram_cs(1'b1),
-    .wren_a(mem_wr),
-    .address_a(ram_a[13:0]),
-    .data_a(cpu_dout),
-    .q_a(ram_dout),
+mock_sdram sdram (
+    // SDRAM interface pins (not used in simulation but needed for interface compliance)
+    .SDRAM_DQ(),
+    .SDRAM_A(),
+    .SDRAM_DQML(),
+    .SDRAM_DQMH(),
+    .SDRAM_BA(),
+    .SDRAM_nCS(),
+    .SDRAM_nWE(),
+    .SDRAM_nRAS(),
+    .SDRAM_nCAS(),
+    .SDRAM_CLK(),
+    .SDRAM_CKE(),
+    
+    // Actual signals used in simulation - match the logic in Amstrad.sv
+    .init(~rom_loaded),
+    .clk(clk_48),
+    .clkref(ce_ref),
 
-    // Port B - Video/ROM interface
-    .clock_b(clk_48),
-    .ram_cs_b(1'b1),
-    .wren_b(ioctl_wr & rom_download),
-    .address_b(vram_addr[13:0]),
-    .data_b(ioctl_dout),
-    .q_b(vram_dout[7:0])
+    // Use exact same logic as in Amstrad.sv
+    .oe(RESET ? 1'b0 : mem_rd),
+    .we(RESET ? boot_wr : mem_wr),
+    .addr(RESET ? boot_a : ram_a),  // Make sure address is correct
+    .bank(RESET ? boot_bank : {1'b0, model}),
+    .din(RESET ? boot_dout : cpu_dout),
+    .dout(ram_dout),
+
+    // Video memory access
+	.vram_addr({2'b10,vram_addr,1'b0}),
+	.vram_dout(vram_dout),
+
+    // Tape access (not used in verilator sim)
+    .tape_addr(),
+    .tape_din(0),
+    .tape_dout(),
+    .tape_wr(0),
+    .tape_wr_ack(),
+    .tape_rd(0),
+    .tape_rd_ack()
 );
 
 endmodule

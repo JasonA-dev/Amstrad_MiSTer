@@ -5,9 +5,15 @@ verilator \
 -Wno-fatal \
 --top-module top sim.v \
     ../rtl/Amstrad_motherboard.v \
-    ../rtl/UM6845R.v \
-    ../rtl/dpram.sv \
+    ../rtl/Amstrad_MMU.v \
     ../rtl/crt_filter.v \
+    ../rtl/color_mix.sv \
+    ../rtl/i8255.v \
+    ../rtl/UM6845R.v \
+    ../rtl/YM2149.sv \
+    ../rtl/dpram.sv \
+    ../rtl/hid.sv \
+    ../rtl/mock_sdram.v \
     ../rtl/GA40010/ga40010.sv \
     ../rtl/GA40010/rslatch.v \
     ../rtl/GA40010/casgen.v \
@@ -15,15 +21,13 @@ verilator \
     ../rtl/GA40010/syncgen.v \
     ../rtl/GA40010/syncgen_sync.v \
     ../rtl/GA40010/video.sv \
-    ../rtl/Amstrad_MMU.v \
-    ../rtl/i8255.v \
-    ../rtl/YM2149.sv \
-    ../rtl/hid.sv \
-    ../rtl/tv80/tv80s.v \
     ../rtl/tv80/tv80_alu.v \
     ../rtl/tv80/tv80_core.v \
-    ../rtl/tv80/tv80_reg.v \
     ../rtl/tv80/tv80_mcode.v \
+    ../rtl/tv80/tv80_reg.v \
+    ../rtl/tv80/tv80e.v \
+    ../rtl/tv80/tv80n.v \
+    ../rtl/tv80/tv80s.v \
     sim_main.cpp \
     ../sim/sim_console.cpp \
     ../sim/sim_audio.cpp \

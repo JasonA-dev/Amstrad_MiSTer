@@ -65,13 +65,13 @@ wire [10:0] v_osd_start = Y_OFFSET;
 wire [10:0] v_osd_end   = v_osd_start + 8'd8;
 
 wire [10:0] osd_hcnt    = h_cnt - h_osd_start;
-wire  [3:0] osd_vcnt    = v_cnt - v_osd_start;
+wire [10:0] osd_vcnt    = v_cnt - v_osd_start;
 reg         osd_de;
 reg         osd_pixel;
 
 always @(posedge clk) begin
 	if(ce_pix) begin
-		case (osd_vcnt)
+		case (osd_vcnt[3:0])
 		0,7: osd_pixel <= 1;
 		2,3,4,5: osd_pixel <= osd_hcnt == 0 || osd_hcnt == 132 || ((osd_hcnt - 2'd2) < progress);
 		default: osd_pixel <= osd_hcnt == 0 || osd_hcnt == 132;

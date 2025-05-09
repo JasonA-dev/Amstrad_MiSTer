@@ -53,7 +53,6 @@ module GX4000_io
     reg [7:0] printer_reg;
     reg [7:0] rs232_reg;
     reg [7:0] playcity_reg;
-    reg       printer_busy_reg;
     reg       rs232_tx_reg;
     reg       playcity_enable;
     
@@ -63,6 +62,10 @@ module GX4000_io
     reg       printer_busy_state;
     reg       rs232_busy;
     reg       playcity_busy;
+    
+    // Joystick state for GX4000 compatibility
+    reg [7:0] joy1_state;
+    reg [7:0] joy2_state;
     
     // I/O processing
     always @(posedge clk_sys) begin
@@ -78,12 +81,15 @@ module GX4000_io
             printer_reg <= 8'h00;
             rs232_reg <= 8'h00;
             playcity_reg <= 8'h00;
-            printer_busy_reg <= 0;
             rs232_tx_reg <= 0;
             playcity_enable <= 0;
             printer_busy_state <= 0;
             rs232_busy <= 0;
             playcity_busy <= 0;
+            
+            // GX4000 joystick state reset
+            joy1_state <= 8'hFF;
+            joy2_state <= 8'hFF;
         end else if (gx4000_mode || plus_mode) begin
             // Register writes
             if (cpu_wr) begin
@@ -100,7 +106,7 @@ module GX4000_io
                 endcase
             end
             
-            // Joystick data update
+            // Joystick data update for standard ports
             joy1_data <= {
                 1'b0,           // Unused
                 joy1[6],        // Fire 3
@@ -122,6 +128,27 @@ module GX4000_io
                 joy2[1],        // Down
                 joy2[0]         // Up
             };
+            
+            // GX4000 style joystick mapping
+            // Joy1 mapping (inverted logic compared to standard)
+            joy1_state[0] <= ~joy1[0]; // Right
+            joy1_state[1] <= ~joy1[1]; // Left
+            joy1_state[2] <= ~joy1[2]; // Down
+            joy1_state[3] <= ~joy1[3]; // Up
+            joy1_state[4] <= ~joy1[4]; // Fire 1
+            joy1_state[5] <= ~joy1[5]; // Fire 2
+            joy1_state[6] <= ~joy1[6]; // Fire 3
+            joy1_state[7] <= 1'b1;     // Unused
+            
+            // Joy2 mapping
+            joy2_state[0] <= ~joy2[0]; // Right
+            joy2_state[1] <= ~joy2[1]; // Left
+            joy2_state[2] <= ~joy2[2]; // Down
+            joy2_state[3] <= ~joy2[3]; // Up
+            joy2_state[4] <= ~joy2[4]; // Fire 1
+            joy2_state[5] <= ~joy2[5]; // Fire 2
+            joy2_state[6] <= ~joy2[6]; // Fire 3
+            joy2_state[7] <= 1'b1;     // Unused
             
             // Printer handling
             if (printer_ack) begin
@@ -153,8 +180,9 @@ module GX4000_io
         end
     end
     
-    // I/O output
+    // I/O output - extended to handle GX4000 joystick addresses
     assign io_dout = 
+        // Standard I/O registers
         (cpu_addr[7:0] == 8'h70) ? {7'h00, joy_swap_reg} :
         (cpu_addr[7:0] == 8'h71) ? peripheral_reg :
         (cpu_addr[7:0] == 8'h72) ? joy1_data :
@@ -163,6 +191,11 @@ module GX4000_io
         (cpu_addr[7:0] == 8'h75) ? rs232_reg :
         (cpu_addr[7:0] == 8'h76) ? playcity_reg :
         (cpu_addr[7:0] == 8'h77) ? {7'h00, playcity_enable} :
+        
+        // GX4000 joystick addresses
+        (cpu_addr == 16'hF7F0) ? joy1_state :
+        (cpu_addr == 16'hF7F1) ? joy2_state :
+        
         8'hFF;
     
     // Peripheral interface
@@ -183,5 +216,5 @@ module GX4000_io
     assign playcity_wr = playcity_busy && playcity_enable;
     assign playcity_rd = cpu_rd && (cpu_addr[7:0] == 8'h76) && playcity_enable;
     
-    // Joystick swap is now an input
+    // Joystick swap is handled via the joy_swap input
 endmodule 
