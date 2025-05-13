@@ -72,7 +72,7 @@ const int input_pause   = 11;
 // Video
 // -----
 #define VGA_ROTATE 0
-#define VGA_WIDTH  640
+#define VGA_WIDTH  400
 #define VGA_HEIGHT 200
 #define VGA_SCALE_X vga_scale
 #define VGA_SCALE_Y vga_scale
@@ -270,7 +270,9 @@ int main(int argc, char** argv, char** env) {
 	if (video.Initialise(windowTitle) == 1) { return 1; }
 
 	// Example downloads
-	bus.QueueDownload("./diagnostics.rom", 0, true);
+	//bus.QueueDownload("./OS6128.rom", 0, true);
+	bus.QueueDownload("./original.rom", 0, true);
+	//bus.QueueDownload("./diagnostics.rom", 0, true);
 
 #ifdef WIN32
 	MSG msg;
