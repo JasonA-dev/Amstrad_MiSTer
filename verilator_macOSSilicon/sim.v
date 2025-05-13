@@ -105,6 +105,7 @@ always @(posedge clk_48) begin
 end
 //----------------------------------------------------------------
 
+reg plus_mode = 0;
 // Memory loading logic - improved to match Amstrad.sv logic
 wire        rom_download = ioctl_download && (ioctl_index[4:0] < 4);
 wire        tape_download = ioctl_download && (ioctl_index == 4);
@@ -330,6 +331,95 @@ wire [1:0]  g;
 wire [1:0]  b;
 wire        VGA_F1;
 
+// Internal signals for Plus mode output
+wire [1:0] plus_r, plus_g, plus_b;
+wire [7:0] plus_audio_l, plus_audio_r;
+
+// GX4000 instance (handles all Plus mode functionality)
+GX4000 cart_inst
+(
+    .clk_sys(clk_48),
+    .reset(RESET),
+    .gx4000_mode(plus_mode),
+    .plus_mode(plus_mode),
+    
+    // CPU interface
+    .cpu_addr(cpu_addr),
+    .cpu_data(cpu_dout),
+    .cpu_wr(wr),
+    .cpu_rd(rd),
+    
+    // Video interface
+    .r_in(r),
+    .g_in(g),
+    .b_in(b),
+    .hblank(hbl),
+    .vblank(vbl),
+    .r_out(plus_r),
+    .g_out(plus_g),
+    .b_out(plus_b),
+    
+    // Audio interface
+    .cpc_audio_l(audio_l),
+    .cpc_audio_r(audio_r),
+    .audio_l(plus_audio_l),
+    .audio_r(plus_audio_r),
+    
+    // Joystick interface
+    .joy1(joy1),
+    .joy2(joy2),
+    .joy_swap(1'b0),
+    
+    // Cartridge interface
+    .cart_download(ioctl_download),
+    .cart_addr(ioctl_addr),
+    .cart_data(ioctl_dout),
+    .cart_wr(ioctl_wr),
+    
+    // ROM loading interface
+    .ioctl_wr(ioctl_wr),
+    .ioctl_addr(ioctl_addr),
+    .ioctl_dout(ioctl_dout),
+    .ioctl_download(ioctl_download),
+    .ioctl_index(ioctl_index),
+    
+    // Status outputs
+    .rom_type(),
+    .rom_size(),
+    .rom_checksum(),
+    .rom_version(),
+    .rom_date(),
+    .rom_title(),
+    .asic_valid(),
+    .asic_status(),
+    .audio_status(),
+    
+    // Plus-specific outputs
+    .plus_bios_valid(plus_valid),
+    
+    // Video source selection - enable ASIC in Plus mode unless disabled by user
+    .use_asic(plus_mode)
+);
+
+// Connect motherboard outputs to intermediate signals
+wire [1:0] mb_r = r;
+wire [1:0] mb_g = g;
+wire [1:0] mb_b = b;
+
+// Final video outputs
+wire [1:0] final_r = plus_mode ? plus_r : mb_r;
+wire [1:0] final_g = plus_mode ? plus_g : mb_g;
+wire [1:0] final_b = plus_mode ? plus_b : mb_b;
+
+// Video output conversion - expanding 2-bit color to 6-bit
+assign VGA_R = {final_r, final_r, final_r};
+assign VGA_G = {final_g, final_g, final_g};
+assign VGA_B = {final_b, final_b, final_b};
+assign VGA_HS = ~hs;  // Invert for VGA
+assign VGA_VS = ~vs;  // Invert for VGA
+assign VGA_HB = hbl;
+assign VGA_VB = vbl;
+
 // Memory interface signals
 wire [7:0]  ram_dout;
 wire [22:0] ram_a;
@@ -380,8 +470,8 @@ Amstrad_motherboard motherboard
     .crtc_type(1'b1),  // Type 1 CRTC
     .sync_filter(1'b1),
     .no_wait(1'b0),    // Enable proper wait states
-    .gx4000_mode(1'b0),
-    .plus_mode(1'b0),
+    .gx4000_mode(plus_mode),
+    .plus_mode(plus_mode),
     .plus_rom_loaded(1'b0),
 
     .tape_in(1'b0),
@@ -426,15 +516,6 @@ Amstrad_motherboard motherboard
     .nmi(NMI),
     .cursor(cursor)
 );
-
-// Video output conversion - expanding 2-bit color to 6-bit
-assign VGA_R = {r, r, r};
-assign VGA_G = {g, g, g};
-assign VGA_B = {b, b, b};
-assign VGA_HS = ~hs;  // Invert for VGA
-assign VGA_VS = ~vs;  // Invert for VGA
-assign VGA_HB = hbl;
-assign VGA_VB = vbl;
 
 mock_sdram sdram (
     // SDRAM interface pins (not used in simulation but needed for interface compliance)

@@ -171,7 +171,7 @@ module GX4000_audio
             
             // Initialize waveform table
             for (integer i = 0; i < 256; i = i + 1) begin
-                wave_table[i] <= i;  // Linear ramp for now
+                wave_table[i] = i;  // Changed from <= to = for combinational assignment
             end
             
             // Reset compression
@@ -386,16 +386,27 @@ module GX4000_audio
     // wire [7:0] noise_out_r = (noise_phase < noise_r) ? 8'hFF : 8'h00; // Future: Right channel noise output
     
     // Sound effect mixing
-    wire [7:0] sfx_out_l = 0;
-    wire [7:0] sfx_out_r = 0;
-    genvar i;
-    generate
-        for (i = 0; i < 4; i = i + 1) begin : sfx_mix
-            wire [7:0] sfx_wave = (sfx_phase[i] < sfx_freq[i]) ? 8'hFF : 8'h00;
-            assign sfx_out_l = sfx_out_l + 8'((sfx_wave * sfx_volume[i] * (8'hFF - sfx_pan[i]) * env_level[i]) >> 24);
-            assign sfx_out_r = sfx_out_r + 8'((sfx_wave * sfx_volume[i] * sfx_pan[i] * env_level[i]) >> 24);
+    reg [7:0] sfx_out_l_reg;
+    reg [7:0] sfx_out_r_reg;
+    reg [7:0] sfx_wave;  // Moved outside always block
+    
+    always @(posedge clk_sys) begin
+        if (reset) begin
+            sfx_out_l_reg <= 0;
+            sfx_out_r_reg <= 0;
+        end else begin
+            sfx_out_l_reg <= 0;  // Reset at start of each cycle
+            sfx_out_r_reg <= 0;
+            for (integer i = 0; i < 4; i = i + 1) begin
+                sfx_wave = (sfx_phase[i] < sfx_freq[i]) ? 8'hFF : 8'h00;  // Regular assignment
+                sfx_out_l_reg <= sfx_out_l_reg + 8'((sfx_wave * sfx_volume[i] * (8'hFF - sfx_pan[i]) * env_level[i]) >> 24);
+                sfx_out_r_reg <= sfx_out_r_reg + 8'((sfx_wave * sfx_volume[i] * sfx_pan[i] * env_level[i]) >> 24);
+            end
         end
-    endgenerate
+    end
+
+    wire [7:0] sfx_out_l = sfx_out_l_reg;
+    wire [7:0] sfx_out_r = sfx_out_r_reg;
     
     // Sprite sound effects
     wire [7:0] sprite_sound_l = sprite_collision ? 8'hFF : 8'h00;
@@ -405,27 +416,52 @@ module GX4000_audio
     wire [7:0] reverb_out = reverb_buffer[(reverb_pos - reverb_time) & 10'h3FF];
     
     // Sample playback mixing
-    wire [7:0] sample_out_l = 0;
-    wire [7:0] sample_out_r = 0;
-    generate
-        for (i = 0; i < 4; i = i + 1) begin : sample_mix
-            wire [7:0] sample_data = sample_mem[sample_pos[i]];
-            wire [7:0] sample_wave = wave_table[sample_data];
-            assign sample_out_l = sample_out_l + (sample_wave * sfx_volume[i] * (8'hFF - sfx_pan[i]) * env_level[i]) >> 24;
-            assign sample_out_r = sample_out_r + (sample_wave * sfx_volume[i] * sfx_pan[i] * env_level[i]) >> 24;
+    reg [7:0] sample_out_l_reg;
+    reg [7:0] sample_out_r_reg;
+    reg [7:0] sample_data;  // Moved outside always block
+    reg [7:0] sample_wave;  // Moved outside always block
+    
+    always @(posedge clk_sys) begin
+        if (reset) begin
+            sample_out_l_reg <= 0;
+            sample_out_r_reg <= 0;
+        end else begin
+            sample_out_l_reg <= 0;  // Reset at start of each cycle
+            sample_out_r_reg <= 0;
+            for (integer i = 0; i < 4; i = i + 1) begin
+                sample_data = sample_mem[sample_pos[i]];  // Regular assignment
+                sample_wave = wave_table[sample_data];    // Regular assignment
+                sample_out_l_reg <= sample_out_l_reg + ((sample_wave * sfx_volume[i] * (8'hFF - sfx_pan[i]) * env_level[i]) >> 24);
+                sample_out_r_reg <= sample_out_r_reg + ((sample_wave * sfx_volume[i] * sfx_pan[i] * env_level[i]) >> 24);
+            end
         end
-    endgenerate
+    end
+
+    wire [7:0] sample_out_l = sample_out_l_reg;
+    wire [7:0] sample_out_r = sample_out_r_reg;
     
     // Enhanced noise output
-    wire [7:0] enhanced_noise_out_l = 0;
-    wire [7:0] enhanced_noise_out_r = 0;
-    generate
-        for (i = 0; i < 4; i = i + 1) begin : noise_mix
-            wire [7:0] noise_wave = noise_seed[i];
-            assign enhanced_noise_out_l = enhanced_noise_out_l + 8'((noise_wave * sfx_volume[i] * (8'hFF - sfx_pan[i])) >> 16);
-            assign enhanced_noise_out_r = enhanced_noise_out_r + 8'((noise_wave * sfx_volume[i] * sfx_pan[i]) >> 16);
+    reg [7:0] enhanced_noise_out_l_reg;
+    reg [7:0] enhanced_noise_out_r_reg;
+    reg [7:0] noise_wave;  // Moved outside always block
+    
+    always @(posedge clk_sys) begin
+        if (reset) begin
+            enhanced_noise_out_l_reg <= 0;
+            enhanced_noise_out_r_reg <= 0;
+        end else begin
+            enhanced_noise_out_l_reg <= 0;  // Reset at start of each cycle
+            enhanced_noise_out_r_reg <= 0;
+            for (integer i = 0; i < 4; i = i + 1) begin
+                noise_wave = noise_seed[i];  // Regular assignment
+                enhanced_noise_out_l_reg <= enhanced_noise_out_l_reg + 8'((noise_wave * sfx_volume[i] * (8'hFF - sfx_pan[i])) >> 16);
+                enhanced_noise_out_r_reg <= enhanced_noise_out_r_reg + 8'((noise_wave * sfx_volume[i] * sfx_pan[i]) >> 16);
+            end
         end
-    endgenerate
+    end
+
+    wire [7:0] enhanced_noise_out_l = enhanced_noise_out_l_reg;
+    wire [7:0] enhanced_noise_out_r = enhanced_noise_out_r_reg;
     
     // Audio compression
     wire [7:0] compressed_l = (sample_out_l * comp_gain) >> 8;
