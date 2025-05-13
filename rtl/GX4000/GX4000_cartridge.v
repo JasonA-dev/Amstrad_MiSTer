@@ -65,6 +65,7 @@ reg [7:0]  bank;
 reg [3:0]  retry_count;
 reg [4:0]  current_block;  // Current cartridge block number (0-31)
 reg [31:0] block_base;     // Base address for current block
+reg [31:0] block_offset;   // Current offset within block
 reg        filling_zeros;  // Flag to indicate we're filling remaining space with zeros
 
 // Format chunk data
@@ -100,6 +101,8 @@ always @(posedge clk_sys) begin
         last_addr <= 0;
         header <= 0;
         byte_count <= 0;
+        block_offset <= 0;
+        filling_zeros <= 0;
     end
     if (ioctl_download && ioctl_wr && is_cpr) begin
         rom_wr <= 0;  // Default state
@@ -245,6 +248,7 @@ always @(posedge clk_sys) begin
                     // First 4 bytes are chunk size (little-endian)
                     chunk_size <= {chunk_size[23:0], ioctl_dout};
                     byte_count <= byte_count + 1;
+                    block_offset <= 0;  // Reset block offset at start of chunk
                     filling_zeros <= 0;  // Reset zero filling flag
                     
                     if (byte_count == 3) begin
@@ -322,17 +326,16 @@ always @(posedge clk_sys) begin
                         default: begin
                             // Check if this is a cartridge block (cb0X)
                             if (chunk_id[31:8] == CB_PREFIX) begin
-                                // Calculate block offset and address
-                                reg [31:0] block_offset = bytes_read - 1;
+                                // Calculate address
                                 reg [31:0] block_addr = block_base + block_offset;
                                 
                                 // Handle data writing or zero filling
                                 if (!filling_zeros && block_offset < chunk_size) begin
                                     // Still writing actual data
                                     if (block_offset < MAX_BLOCK_SIZE) begin
-                                        rom_wr <= 1;
                                         addr <= block_addr[22:0];  // Map to 23-bit SDRAM address
                                         data <= ioctl_dout;
+                                        block_offset <= block_offset + 1;
                                         
                                         // Track progress
                                         if ((block_offset & 16'hFFF) == 0) begin
@@ -359,9 +362,9 @@ always @(posedge clk_sys) begin
                                 else if (filling_zeros) begin
                                     // Fill remaining space with zeros
                                     if (block_offset < MAX_BLOCK_SIZE) begin
-                                        rom_wr <= 1;
                                         addr <= block_addr[22:0];  // Map to 23-bit SDRAM address
                                         data <= 8'h00;
+                                        block_offset <= block_offset + 1;
                                         
                                         // Track zero-filling progress
                                         if ((block_offset & 16'hFFF) == 0) begin
@@ -414,9 +417,11 @@ assign rom_rd = plus_mode && cart_rd;
 assign auto_boot = auto_boot_en;
 assign boot_addr = boot_vector;
 
-// Drive cartridge interface signals - temporarily disable SDRAM writes
-assign cart_addr = 25'd0;  // Disable for now
-assign cart_data = 8'd0;   // Disable for now
-assign cart_wr = 1'b0;     // Disable for now
+// Drive cartridge interface signals - only enable during cartridge block writes
+assign cart_addr = {2'b00, addr};  // Extend to 25 bits
+assign cart_data = data;
+assign cart_wr = ioctl_download && ioctl_wr && is_cpr && 
+                 (state == S_DATA) && (chunk_id[31:8] == CB_PREFIX) &&
+                 (bytes_read > 0) && (block_offset < MAX_BLOCK_SIZE);
 
 endmodule 

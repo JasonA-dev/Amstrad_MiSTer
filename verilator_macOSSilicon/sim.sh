@@ -62,5 +62,6 @@ verilator \
     ../obj_dir/Vtop__1__Slow.cpp \
     ../obj_dir/Vtop__2.cpp \
     ../obj_dir/Vtop__2__Slow.cpp \
+    ../obj_dir/Vtop__3.cpp \
     -CFLAGS "-arch arm64 -I/opt/homebrew/opt/sdl2 -I../sim -I../sim/imgui -I../sim/implot -I../sim/imgui/backends" \
     -LDFLAGS "-arch arm64 -L/opt/homebrew/opt/sdl2/lib -lSDL2 -framework OpenGL -v" && ./obj_dir/Vtop $*
