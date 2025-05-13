@@ -2,8 +2,7 @@ module GX4000_video
 (
     input         clk_sys,
     input         reset,
-    input         gx4000_mode,
-    input         plus_mode,
+    input         plus_mode,      // Plus mode input
     
     // CPU interface
     input  [15:0] cpu_addr,
@@ -18,7 +17,7 @@ module GX4000_video
     input         hblank,
     input         vblank,
     
-    // Video output (final RGB output)
+    // Video output
     output  [1:0] r_out,
     output  [1:0] g_out,
     output  [1:0] b_out,
@@ -26,8 +25,6 @@ module GX4000_video
     // Sprite interface outputs (for audio module)
     output        sprite_active,
     output  [3:0] sprite_id,
-    
-    // Collision detection
     output  [7:0] collision_reg
 );
 
@@ -110,7 +107,6 @@ module GX4000_video
     (
         .clk_sys(clk_sys),
         .reset(reset),
-        .gx4000_mode(gx4000_mode),
         .plus_mode(plus_mode),
         .cpu_addr(cpu_addr),
         .cpu_data(cpu_data),
@@ -161,7 +157,7 @@ module GX4000_video
             g_reg_prev <= 8'h00;
             b_reg_prev <= 8'h00;
             frame_counter <= 8'h00;
-        end else if (gx4000_mode) begin
+        end else if (plus_mode) begin
             // Register writes
             if (cpu_wr) begin
                 case (cpu_addr[7:0])
@@ -439,8 +435,8 @@ module GX4000_video
             final_b <= 2'b00;
         end
         else begin
-            if (gx4000_mode | plus_mode) begin
-                // In Plus or GX4000 mode with sprites active
+            if (plus_mode) begin
+                // In Plus mode with sprites active
                 if (sprite_active_sync) begin
                     // If sprite is active, use processed video with sprites
                     final_r <= r_reg;

@@ -1,8 +1,7 @@
-module GX4000
+module PlusMode
 (
     input         clk_sys,
     input         reset,
-    input         gx4000_mode,    // GX4000 mode compatibility input
     input         plus_mode,      // Plus mode input
     input         use_asic,       // Control whether to use the ASIC for video processing
     
@@ -33,11 +32,10 @@ module GX4000
     input   [6:0] joy2,
     input         joy_swap,
     
-    // Cartridge interface
-    input         cart_download,
-    input  [24:0] cart_addr,
-    input   [7:0] cart_data,
-    input         cart_wr,
+    // Cartridge interface - outputs to SDRAM
+    output [24:0] cart_addr,
+    output  [7:0] cart_data,
+    output        cart_wr,
     
     // ROM loading interface
     input         ioctl_wr,
@@ -61,9 +59,6 @@ module GX4000
     output        plus_bios_valid
 );
 
-    // Combine both inputs for a unified Plus mode 
-    wire active_plus_mode = gx4000_mode | plus_mode;
-
     // Internal signals
     wire [7:0] io_dout;
     wire [22:0] rom_addr;
@@ -76,8 +71,16 @@ module GX4000
     wire [15:0] plus_bios_checksum;
     wire [7:0]  plus_bios_version;
     
-    // Cartridge control signals
-    wire       cart_rd = 1'b0;  // Fixed implicit net - set to 0 as it's only an input to cart_inst
+    // Cartridge interface signals
+    wire [24:0] cart_addr_int;  // Internal cartridge address
+    wire [7:0]  cart_data_int;  // Internal cartridge data
+    wire        cart_wr_int;    // Internal cartridge write
+    wire        cart_rd = 1'b0; // Fixed to 0 as it's only an input to cart_inst
+    
+    // Assign cartridge outputs
+    assign cart_addr = cart_addr_int;
+    assign cart_data = cart_data_int;
+    assign cart_wr = cart_wr_int;
     
     // Sprite-related signals from video module
     wire [3:0] sprite_id;
@@ -89,8 +92,7 @@ module GX4000
     (
         .clk_sys(clk_sys),
         .reset(reset),
-        .gx4000_mode(active_plus_mode),
-        .plus_mode(active_plus_mode),
+        .plus_mode(plus_mode),
         .cpu_addr(cpu_addr),
         .cpu_data(cpu_data),
         .cpu_wr(cpu_wr),
@@ -106,8 +108,7 @@ module GX4000
     (
         .clk_sys(clk_sys),
         .reset(reset),
-        .gx4000_mode(active_plus_mode & use_asic),
-        .plus_mode(active_plus_mode & use_asic),
+        .plus_mode(plus_mode & use_asic),
         
         // CPU interface
         .cpu_addr(cpu_addr),
@@ -138,17 +139,17 @@ module GX4000
     (
         .clk_sys(clk_sys),
         .reset(reset),
-        .gx4000_mode(active_plus_mode & use_asic),
-        .plus_mode(active_plus_mode & use_asic),
+        .gx4000_mode(plus_mode),  // Use plus_mode for gx4000_mode
+        .plus_mode(plus_mode & use_asic),
         .cpu_addr(cpu_addr),
         .cpu_data_in(cpu_data),
         .cpu_wr(cpu_wr),
         .cpu_rd(cpu_rd),
         .cpu_data_out(),
-        .cart_download(cart_download),
-        .cart_addr(cart_addr),
-        .cart_data(cart_data),
-        .cart_wr(cart_wr),
+        .cart_download(ioctl_download),
+        .cart_addr(cart_addr_int),  // Connect to internal signals
+        .cart_data(cart_data_int),
+        .cart_wr(cart_wr_int),
         .asic_valid(asic_valid),
         .asic_status(asic_status)
     );
@@ -158,8 +159,7 @@ module GX4000
     (
         .clk_sys(clk_sys),
         .reset(reset),
-        .gx4000_mode(active_plus_mode & use_asic),
-        .plus_mode(active_plus_mode & use_asic),
+        .plus_mode(plus_mode & use_asic),
         .cpu_addr(cpu_addr),
         .cpu_data(cpu_data),
         .cpu_wr(cpu_wr),
@@ -173,40 +173,44 @@ module GX4000
         .vblank(vblank),
         .audio_l(audio_l),
         .audio_r(audio_r),
-        .audio_status(audio_status)
+        .audio_status(audio_status),
+        .sample_wr(1'b0),                     // Not used in simulation
+        .sample_addr(16'h0000),               // Not used in simulation
+        .sample_data(8'h00)                   // Not used in simulation
     );
 
-    // Consolidated cartridge module instance
+    // Cartridge module instance
     GX4000_cartridge cart_inst
     (
         .clk_sys(clk_sys),
         .reset(reset),
-        .gx4000_mode(active_plus_mode),
-        .plus_mode(active_plus_mode),
-        .cart_addr(cart_addr),
-        .cart_data(cart_data),
+        .plus_mode(plus_mode),
+        
+        // Cartridge interface - connect to internal signals
+        .cart_addr(cart_addr_int),
+        .cart_data(cart_data_int),
         .cart_rd(cart_rd),
-        .cart_wr(cart_wr),
+        .cart_wr(cart_wr_int),
+        
+        // ROM loading interface
         .ioctl_wr(ioctl_wr),
         .ioctl_addr(ioctl_addr),
         .ioctl_dout(ioctl_dout),
         .ioctl_download(ioctl_download),
         .ioctl_index(ioctl_index),
+        
+        // Memory interface
         .rom_addr(rom_addr),
         .rom_data(rom_data),
         .rom_wr(rom_wr),
         .rom_rd(rom_rd),
         .rom_q(rom_q),
+        
+        // Auto-boot interface
         .auto_boot(auto_boot),
         .boot_addr(boot_addr),
-        // Cartridge information outputs
-        .rom_type(rom_type),
-        .rom_size(rom_size),
-        .rom_checksum(rom_checksum),
-        .rom_version(rom_version),
-        .rom_date(rom_date),
-        .rom_title(rom_title),
-        // Plus-specific outputs - now used for any cartridge validation
+        
+        // Plus ROM validation outputs
         .plus_bios_valid(plus_bios_valid),
         .plus_bios_checksum(plus_bios_checksum),
         .plus_bios_version(plus_bios_version)

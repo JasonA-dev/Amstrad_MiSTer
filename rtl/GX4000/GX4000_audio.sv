@@ -2,8 +2,7 @@ module GX4000_audio
 (
     input         clk_sys,
     input         reset,
-    input         gx4000_mode,
-    input         plus_mode,
+    input         plus_mode,      // Plus mode input
     
     // CPU interface
     input  [15:0] cpu_addr,
@@ -206,7 +205,7 @@ module GX4000_audio
             status_error <= 8'h00;
             // status_processing <= 8'h00;
             
-        end else if (gx4000_mode) begin
+        end else if (plus_mode) begin
             // Register writes
             if (cpu_wr) begin
                 case (cpu_addr[7:0])
@@ -418,8 +417,8 @@ module GX4000_audio
     // Sample playback mixing
     reg [7:0] sample_out_l_reg;
     reg [7:0] sample_out_r_reg;
-    reg [7:0] sample_data;  // Moved outside always block
-    reg [7:0] sample_wave;  // Moved outside always block
+    reg [7:0] current_sample;  // Renamed from sample_data to avoid conflict
+    reg [7:0] sample_wave;
     
     always @(posedge clk_sys) begin
         if (reset) begin
@@ -429,8 +428,8 @@ module GX4000_audio
             sample_out_l_reg <= 0;  // Reset at start of each cycle
             sample_out_r_reg <= 0;
             for (integer i = 0; i < 4; i = i + 1) begin
-                sample_data = sample_mem[sample_pos[i]];  // Regular assignment
-                sample_wave = wave_table[sample_data];    // Regular assignment
+                current_sample = sample_mem[sample_pos[i]];  // Using renamed register
+                sample_wave = wave_table[current_sample];    // Using renamed register
                 sample_out_l_reg <= sample_out_l_reg + ((sample_wave * sfx_volume[i] * (8'hFF - sfx_pan[i]) * env_level[i]) >> 24);
                 sample_out_r_reg <= sample_out_r_reg + ((sample_wave * sfx_volume[i] * sfx_pan[i] * env_level[i]) >> 24);
             end

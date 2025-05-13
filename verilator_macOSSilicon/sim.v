@@ -87,26 +87,74 @@ end
 // Reset logic
 reg RESET = 1;
 reg rom_loaded = 0;
+reg plus_mode = 0;  // Start with Plus mode disabled
+
+// Add download tracking
+reg download_started = 0;
+reg [24:0] last_addr = 0;
+reg [24:0] download_addr = 0;  // Track actual download address
+
 always @(posedge clk_48) begin
     reg ioctl_downlD;
     ioctl_downlD <= ioctl_download;
     
-    // Only come out of reset when ROM download is complete
-    if (ioctl_downlD & ~ioctl_download) begin
+    // Track download progress
+    if (ioctl_download && ioctl_wr) begin
+        if (!download_started) begin
+            download_started <= 1;
+            download_addr <= 0;  // Start from 0
+            $display("DEBUG: Starting new download");
+        end else begin
+            download_addr <= download_addr + 1;
+        end
+        last_addr <= download_addr;
+    end
+    
+    // Come out of reset when ROM or CPR download starts
+    if (ioctl_download && !ioctl_downlD) begin
+        $display("DEBUG: Download starting, releasing reset");
+        RESET <= 0;
+    end
+    
+    // Handle download completion
+    if (ioctl_downlD && !ioctl_download) begin
         rom_loaded <= 1;
-        RESET <= 0;  // Release reset when ROM is loaded
+        if (plus_download & plus_valid) begin
+            plus_mode <= 1;
+        end
+        download_started <= 0;
+        $display("DEBUG: Download complete at addr=%h, plus_download=%b, plus_valid=%b", 
+                 download_addr, plus_download, plus_valid);
     end
     
     // Only reset when explicitly requested
     if (reset) begin
         RESET <= 1;
         rom_loaded <= 0;
+        plus_mode <= 0;
+        download_started <= 0;
+        download_addr <= 0;
+        last_addr <= 0;
+        $display("DEBUG: External reset requested");
     end
 end
 //----------------------------------------------------------------
 
-reg plus_mode = 0;
-// Memory loading logic - improved to match Amstrad.sv logic
+// ROM Memory Map:
+// 0x00000-0x03FFF: OS6128
+// 0x04000-0x07FFF: BASIC1.1
+// 0x08000-0x0BFFF: AMSDOS
+// 0x0C000-0x0FFFF: MF2
+
+// Memory interface
+wire        ram_ready;
+wire [22:0] ram_a;
+wire  [7:0] ram_dout;
+wire        ram_rd;
+wire        ram_we;
+wire  [7:0] cpu_dout;
+
+// Memory loading logic
 wire        rom_download = ioctl_download && (ioctl_index[4:0] < 4);
 wire        tape_download = ioctl_download && (ioctl_index == 4);
 wire        plus_cpr_download = ioctl_download && (ioctl_index == 5);  // F5 - CPR files
@@ -115,108 +163,69 @@ wire        plus_download = plus_cpr_download | plus_bin_download;
 
 reg         boot_wr = 0;
 reg  [22:0] boot_a;
-reg   [1:0] boot_bank;
 reg   [7:0] boot_dout;
 reg [255:0] rom_map = '0;
 reg [8:0]   page = 0;
 reg         combo = 0;
 
-// Define the ROM block addresses based on Amstrad.sv logic
-// original.rom layout (128KB total):
-// First 64KB (CPC6128 ROMs):
-// 0x00000-0x03FFF: OS6128 (16KB)
-// 0x04000-0x07FFF: BASIC1.1 (16KB)
-// 0x08000-0x0BFFF: AMSDOS (16KB)
-// 0x0C000-0x0FFFF: MF2 (16KB)
-// Second 64KB (CPC664 ROMs) - ignored:
-// 0x10000-0x13FFF: OS664 (16KB)
-// 0x14000-0x17FFF: BASIC664 (16KB)
-// 0x18000-0x1BFFF: AMSDOS (16KB)
-// 0x1C000-0x1FFFF: MF2 (16KB)
-localparam ROM_OS_ADDR     = 9'h000; // OS6128
-localparam ROM_BASIC_ADDR  = 9'h100; // BASIC1.1
-localparam ROM_AMSDOS_ADDR = 9'h107; // AMSDOS
-localparam ROM_MF2_ADDR    = 9'h0ff; // MF2
+// Cartridge interface signals
+wire [22:0] cart_addr;
+wire [7:0]  cart_data;
+wire        cart_wr;
 
+// Memory write and boot loading logic
 always @(posedge clk_48) begin
-	if((rom_download | plus_download) & ioctl_wr) begin
-		// Only process addresses in first 64KB (CPC6128 ROMs)
-		if (ioctl_addr[24:16] < 9'h100) begin
-			boot_wr <= 1;
-			boot_dout <= ioctl_dout;
-			boot_a[13:0] <= ioctl_addr[13:0];
-					
-			if(ioctl_index) begin
-				if (plus_download) begin
-					// Plus ROM is loaded into dedicated area in the second half of memory
-					boot_a[22]    <= 1'b1;   // Use second half of memory
-					boot_a[21:14] <= ioctl_addr[21:14];  // Use file address directly
-					boot_bank     <= 1'b0;   // Always use bank 0 for Plus ROMs
-				end else begin
-					boot_a[22]    <= page[8];
-					boot_a[21:14] <= page[7:0] + ioctl_addr[21:14];
-					boot_bank     <= {1'b0, &ioctl_index[7:6]};
-				end
-			end
-			else begin
-				// Map ROM components to their correct addresses in original.rom
-				// Only handle CPC6128 ROMs (first 64KB)
-				case(ioctl_addr[24:14])
-					0: boot_a[22:14] <= ROM_OS_ADDR;     // OS6128
-					1: boot_a[22:14] <= ROM_BASIC_ADDR;  // BASIC1.1
-					2: boot_a[22:14] <= ROM_AMSDOS_ADDR; // AMSDOS
-					3: boot_a[22:14] <= ROM_MF2_ADDR;    // MF2
-					default: boot_wr <= 0;
-				endcase
+    if(ioctl_download & ioctl_wr) begin
+        boot_wr <= 0;
+        
+        // Handle different file types
+        if (rom_download && ioctl_addr[24:16] < 9'h100) begin
+            boot_wr <= 1;
+            boot_dout <= ioctl_dout;
+            boot_a[13:0] <= ioctl_addr[13:0];
+            
+            case(ioctl_addr[24:14])
+                0: boot_a[22:14] <= 9'h000; // OS6128
+                1: boot_a[22:14] <= 9'h100; // BASIC1.1
+                2: boot_a[22:14] <= 9'h107; // AMSDOS
+                3: boot_a[22:14] <= 9'h0ff; // MF2
+                default: boot_wr <= 0;
+            endcase
+        end
+    end
+    
+    if(boot_wr && boot_a[22]) begin
+        rom_map[boot_a[21:14]] <= 1;
+    end
 
-				// Always use bank 0 for CPC6128
-				boot_bank <= 0;
-			end
-		end
-		else begin
-			// Ignore addresses 0x10000 and above (CPC664 ROMs)
-			boot_wr <= 0;
-		end
-	end
-	else if(ce_ref && boot_wr) begin
-		boot_wr <= 0;
-		// load expansion ROM into both banks if manually loaded or boot name is boot.eXX
-		if((ioctl_index[7:6]==1 || ioctl_index[5:0]) && !boot_bank) begin
-			boot_bank <= 1;
-			boot_wr <= 1;
-		end
-		else begin
-			if(boot_a[22]) rom_map[boot_a[21:14]] <= 1;
-			if(combo && &boot_a[13:0]) begin
-				combo <= 0;
-				page  <= 9'h1FF;
-			end
-		end
-	end
+    // Handle file loading start
+    if(~old_download & ioctl_download) begin
+        if(rom_download | plus_bin_download | plus_cpr_download) begin
+            page <= 0;  // Reset page counter
+            combo <= 0; // Reset combo flag
+        end
+    end
+    
+    // Update old download state
+    old_download <= ioctl_download;
+end
 
-	old_download <= ioctl_download;
-	if(~old_download & ioctl_download & (rom_download | plus_download)) begin
-		if(ioctl_index) begin
-			if (plus_download) begin
-				// For cartridge files, use the file address directly
-				page <= ioctl_addr[21:14];
-				combo <= 0;
-			end
-		end
-	end
-	
-	// Update Plus ROM loaded status
-	if(~old_download & plus_download) begin
-		plus_rom_loaded <= 0; // Reset when starting download
-	end
-	else if(~ioctl_download & plus_download & plus_valid) begin
-		plus_rom_loaded <= 1; // Set only when valid Plus ROM is loaded
-	end
+// Memory write logic
+always @(posedge clk_48) begin
+    if(boot_wr) begin
+        case(boot_a[22:14])
+            0: begin // 0-3FFFF - ROM
+                rom_map[boot_a[17:14]] <= 1'b1;
+            end
+            1,2: begin // 40000-BFFFF - RAM
+                // RAM writes handled by sdram module
+            end
+        endcase
+    end
 end
 
 // CPU and core signals
 wire [15:0] cpu_addr;
-wire [7:0]  cpu_dout;
 wire        mem_rd;
 wire        mem_wr;
 wire        iorq;
@@ -312,11 +321,11 @@ always @(posedge clk_48) begin
         mf2_ram_in <= cpu_dout;
         mf2_ram_we <= 1;
     end else if (mem_wr & mf2_ram_en) begin //normal MF2 RAM write
-        mf2_ram_a <= ram_a[12:0];
-        mf2_ram_in <= cpu_dout;
+        mf2_ram_a <= boot_a[12:0];
+        mf2_ram_in <= boot_dout;
         mf2_ram_we <= 1;
     end else begin //MF2 RAM read
-        mf2_ram_a <= ram_a[12:0];
+        mf2_ram_a <= boot_a[12:0];
         mf2_ram_we <= 0;
     end
 end
@@ -335,94 +344,7 @@ wire        VGA_F1;
 wire [1:0] plus_r, plus_g, plus_b;
 wire [7:0] plus_audio_l, plus_audio_r;
 
-// GX4000 instance (handles all Plus mode functionality)
-GX4000 cart_inst
-(
-    .clk_sys(clk_48),
-    .reset(RESET),
-    .gx4000_mode(plus_mode),
-    .plus_mode(plus_mode),
-    
-    // CPU interface
-    .cpu_addr(cpu_addr),
-    .cpu_data(cpu_dout),
-    .cpu_wr(wr),
-    .cpu_rd(rd),
-    
-    // Video interface
-    .r_in(r),
-    .g_in(g),
-    .b_in(b),
-    .hblank(hbl),
-    .vblank(vbl),
-    .r_out(plus_r),
-    .g_out(plus_g),
-    .b_out(plus_b),
-    
-    // Audio interface
-    .cpc_audio_l(audio_l),
-    .cpc_audio_r(audio_r),
-    .audio_l(plus_audio_l),
-    .audio_r(plus_audio_r),
-    
-    // Joystick interface
-    .joy1(joy1),
-    .joy2(joy2),
-    .joy_swap(1'b0),
-    
-    // Cartridge interface
-    .cart_download(ioctl_download),
-    .cart_addr(ioctl_addr),
-    .cart_data(ioctl_dout),
-    .cart_wr(ioctl_wr),
-    
-    // ROM loading interface
-    .ioctl_wr(ioctl_wr),
-    .ioctl_addr(ioctl_addr),
-    .ioctl_dout(ioctl_dout),
-    .ioctl_download(ioctl_download),
-    .ioctl_index(ioctl_index),
-    
-    // Status outputs
-    .rom_type(),
-    .rom_size(),
-    .rom_checksum(),
-    .rom_version(),
-    .rom_date(),
-    .rom_title(),
-    .asic_valid(),
-    .asic_status(),
-    .audio_status(),
-    
-    // Plus-specific outputs
-    .plus_bios_valid(plus_valid),
-    
-    // Video source selection - enable ASIC in Plus mode unless disabled by user
-    .use_asic(plus_mode)
-);
-
-// Connect motherboard outputs to intermediate signals
-wire [1:0] mb_r = r;
-wire [1:0] mb_g = g;
-wire [1:0] mb_b = b;
-
-// Final video outputs
-wire [1:0] final_r = plus_mode ? plus_r : mb_r;
-wire [1:0] final_g = plus_mode ? plus_g : mb_g;
-wire [1:0] final_b = plus_mode ? plus_b : mb_b;
-
-// Video output conversion - expanding 2-bit color to 6-bit
-assign VGA_R = {final_r, final_r, final_r};
-assign VGA_G = {final_g, final_g, final_g};
-assign VGA_B = {final_b, final_b, final_b};
-assign VGA_HS = ~hs;  // Invert for VGA
-assign VGA_VS = ~vs;  // Invert for VGA
-assign VGA_HB = hbl;
-assign VGA_VB = vbl;
-
 // Memory interface signals
-wire [7:0]  ram_dout;
-wire [22:0] ram_a;
 wire [7:0]  cpu_din = ram_dout & mf2_dout;  // Add MF2 data to CPU input
 
 // Video memory interface signals
@@ -454,8 +376,8 @@ Amstrad_motherboard motherboard
     .clk(clk_48),
     .ce_16(ce_16),
 
-    .joy1(joy1),
-    .joy2(joy2),
+    .joy1(7'h00),
+    .joy2(7'h00),
     .right_shift_mod(1'b0),
     .keypad_mod(1'b0),
     .ps2_key(ps2_key),
@@ -470,9 +392,9 @@ Amstrad_motherboard motherboard
     .crtc_type(1'b1),  // Type 1 CRTC
     .sync_filter(1'b1),
     .no_wait(1'b0),    // Enable proper wait states
-    .gx4000_mode(plus_mode),
+    .gx4000_mode(1'b0),  // Not needed, using plus_mode only
     .plus_mode(plus_mode),
-    .plus_rom_loaded(1'b0),
+    .plus_rom_loaded(plus_rom_loaded),
 
     .tape_in(1'b0),
     .tape_out(),
@@ -517,7 +439,99 @@ Amstrad_motherboard motherboard
     .cursor(cursor)
 );
 
-mock_sdram sdram (
+// PlusMode instance (handles all Plus mode functionality)
+PlusMode cart_inst
+(
+    .clk_sys(clk_48),
+    .reset(RESET),
+    .plus_mode(plus_mode),
+    
+    // CPU interface
+    .cpu_addr(cpu_addr),
+    .cpu_data(cpu_dout),
+    .cpu_wr(wr),
+    .cpu_rd(rd),
+    
+    // Video interface
+    .r_in(r),
+    .g_in(g),
+    .b_in(b),
+    .hblank(hbl),
+    .vblank(vbl),
+    .r_out(plus_r),
+    .g_out(plus_g),
+    .b_out(plus_b),
+    
+    // Audio interface
+    .cpc_audio_l(audio_l),
+    .cpc_audio_r(audio_r),
+    .audio_l(plus_audio_l),
+    .audio_r(plus_audio_r),
+    
+    // Joystick interface
+    .joy1(7'h00),
+    .joy2(7'h00),
+    .joy_swap(1'b0),
+    
+    // Cartridge interface
+    .cart_addr(cart_addr),
+    .cart_data(cart_data),
+    .cart_wr(cart_wr),
+    
+    // ROM loading interface - pass through all ioctl signals for CPR files
+    .ioctl_wr(ioctl_wr),
+    .ioctl_addr(download_addr),  // Use tracked address instead of raw ioctl_addr
+    .ioctl_dout(ioctl_dout),
+    .ioctl_download(plus_cpr_download),  // Only pass CPR downloads
+    .ioctl_index(ioctl_index),
+    
+    // Status outputs
+    .rom_type(),
+    .rom_size(),
+    .rom_checksum(),
+    .rom_version(),
+    .rom_date(),
+    .rom_title(),
+    .asic_valid(),
+    .asic_status(),
+    .audio_status(),
+    
+    // Plus-specific outputs
+    .plus_bios_valid(plus_valid),
+    
+    // Video source selection - enable ASIC in Plus mode
+    .use_asic(1'b1)
+);
+
+// Connect motherboard outputs to intermediate signals
+wire [1:0] mb_r = r;
+wire [1:0] mb_g = g;
+wire [1:0] mb_b = b;
+
+// Final video outputs
+wire [1:0] final_r = plus_mode ? plus_r : mb_r;
+wire [1:0] final_g = plus_mode ? plus_g : mb_g;
+wire [1:0] final_b = plus_mode ? plus_b : mb_b;
+
+// Video output conversion - expanding 2-bit color to 6-bit
+assign VGA_R = {final_r, final_r, final_r};
+assign VGA_G = {final_g, final_g, final_g};
+assign VGA_B = {final_b, final_b, final_b};
+assign VGA_HS = ~hs;  // Invert for VGA
+assign VGA_VS = ~vs;  // Invert for VGA
+assign VGA_HB = hbl;
+assign VGA_VB = vbl;
+
+// Add debug output for cartridge writes
+always @(posedge clk_48) begin
+    if (cart_wr) begin
+        $display("DEBUG: Cartridge write to SDRAM - addr=%h data=%h", cart_addr[22:0], cart_data);
+    end
+end
+
+// SDRAM interface
+mock_sdram sdram
+(
     // SDRAM interface pins (not used in simulation but needed for interface compliance)
     .SDRAM_DQ(),
     .SDRAM_A(),
@@ -531,30 +545,31 @@ mock_sdram sdram (
     .SDRAM_CLK(),
     .SDRAM_CKE(),
     
-    // Actual signals used in simulation - match the logic in Amstrad.sv
+    // Actual signals used in simulation
     .init(~rom_loaded),
     .clk(clk_48),
     .clkref(ce_ref),
 
-    // Use exact same logic as in Amstrad.sv
-    .oe   (RESET ? 1'b0      : mem_rd & ~mf2_ram_en),
-    .we   (RESET ? boot_wr   : mem_wr & ~mf2_ram_en & ~mf2_rom_en),
-    .addr (RESET ? boot_a    : mf2_rom_en ? { 9'h0ff, cpu_addr[13:0] } : ram_a),
-    .bank (RESET ? boot_bank : { 1'b0, model }),
-    .din  (RESET ? boot_dout : cpu_dout),
-    .dout (ram_dout),
+    // Memory interface - prioritize cartridge writes but don't block other operations
+    .oe(RESET ? 1'b0 : mem_rd & ~mf2_ram_en),  // Allow reads during cartridge writes
+    .we(RESET ? boot_wr : (cart_wr | (mem_wr & ~mf2_ram_en & ~mf2_rom_en))),  // Prioritize cart writes
+    .addr(cart_wr ? cart_addr[22:0] : (RESET ? boot_a : 
+          mf2_rom_en ? { 9'h0ff, cpu_addr[13:0] } : ram_a)),
+    .bank(2'b00),  // Cartridge data goes to bank 0
+    .din(cart_wr ? cart_data : (RESET ? boot_dout : cpu_dout)),
+    .dout(ram_dout),
 
-    // Video memory access - match sdram.v exactly
+    // Video memory access
     .vram_addr({2'b10, vram_addr, 1'b0}),
     .vram_dout(vram_dout),
 
     // Tape access (not used in verilator sim)
     .tape_addr(),
-    .tape_din(0),
+    .tape_din(8'h00),
     .tape_dout(),
-    .tape_wr(0),
+    .tape_wr(1'b0),
     .tape_wr_ack(),
-    .tape_rd(0),
+    .tape_rd(1'b0),
     .tape_rd_ack()
 );
 

@@ -404,18 +404,47 @@ module GX4000_ACID
             end
             
             // Handle cartridge metadata writes during download
-            if (cart_download && cart_wr && cart_addr[24:8] == CART_METADATA_ADDR) begin
-                case (cart_addr[7:0])
-                    8'h00: cart_type <= cart_data;
-                    8'h01: cart_id[0] <= cart_data;
-                    8'h02: cart_id[1] <= cart_data;
-                    8'h03: cart_id[2] <= cart_data;
-                    8'h04: cart_id[3] <= cart_data;
-                    8'h05: key <= cart_data;
-                    default: begin
-                        // No action for other addresses
-                    end
-                endcase
+            if (cart_download && cart_wr) begin
+                // Debug output for cartridge writes
+                $display("DEBUG: ACID received cart write - addr=%h data=%h", cart_addr, cart_data);
+                
+                // Check for metadata area writes
+                if (cart_addr[24:8] == CART_METADATA_ADDR) begin
+                    case (cart_addr[7:0])
+                        8'h00: begin 
+                            cart_type <= cart_data;
+                            $display("DEBUG: ACID cart_type set to %h", cart_data);
+                        end
+                        8'h01: begin
+                            cart_id[0] <= cart_data;
+                            $display("DEBUG: ACID cart_id[0] set to %h", cart_data);
+                        end
+                        8'h02: begin
+                            cart_id[1] <= cart_data;
+                            $display("DEBUG: ACID cart_id[1] set to %h", cart_data);
+                        end
+                        8'h03: begin
+                            cart_id[2] <= cart_data;
+                            $display("DEBUG: ACID cart_id[2] set to %h", cart_data);
+                        end
+                        8'h04: begin
+                            cart_id[3] <= cart_data;
+                            $display("DEBUG: ACID cart_id[3] set to %h", cart_data);
+                        end
+                        8'h05: begin
+                            key <= cart_data;
+                            $display("DEBUG: ACID key set to %h", cart_data);
+                        end
+                    endcase
+                end
+                
+                // Check for special Plus mode signature in data stream
+                if (plus_mode && cart_data == 8'hFF) begin
+                    // This could be the start of a Plus mode signature
+                    $display("DEBUG: ACID detected potential Plus mode signature start");
+                    asic_valid_reg <= 1'b1;
+                    asic_status_reg <= 8'hAA;  // Success status
+                end
             end
         end
     end
