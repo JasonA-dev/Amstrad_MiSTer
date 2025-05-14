@@ -522,13 +522,14 @@ assign VGA_VS = ~vs;  // Invert for VGA
 assign VGA_HB = hbl;
 assign VGA_VB = vbl;
 
+/*
 // Add debug output for cartridge writes
 always @(posedge clk_48) begin
     if (cart_wr) begin
         $display("DEBUG: Cartridge write to SDRAM - addr=%h data=%h", cart_addr[22:0], cart_data);
     end
 end
-
+*/
 // SDRAM interface
 mock_sdram sdram
 (

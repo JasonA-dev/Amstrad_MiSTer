@@ -139,17 +139,16 @@ module PlusMode
     (
         .clk_sys(clk_sys),
         .reset(reset),
-        .gx4000_mode(plus_mode),  // Use plus_mode for gx4000_mode
         .plus_mode(plus_mode & use_asic),
+        
+        // CPU interface
         .cpu_addr(cpu_addr),
         .cpu_data_in(cpu_data),
         .cpu_wr(cpu_wr),
         .cpu_rd(cpu_rd),
         .cpu_data_out(),
-        .cart_download(ioctl_download),
-        .cart_addr(cart_addr_int),  // Connect to internal signals
-        .cart_data(cart_data_int),
-        .cart_wr(cart_wr_int),
+        
+        // Status outputs
         .asic_valid(asic_valid),
         .asic_status(asic_status)
     );

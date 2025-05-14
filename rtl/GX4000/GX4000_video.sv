@@ -108,10 +108,14 @@ module GX4000_video
         .clk_sys(clk_sys),
         .reset(reset),
         .plus_mode(plus_mode),
+        
+        // CPU interface
         .cpu_addr(cpu_addr),
         .cpu_data(cpu_data),
         .cpu_wr(cpu_wr),
         .cpu_rd(cpu_rd),
+        
+        // Video interface
         .hpos(pos_h),          // Use internal position counters
         .vpos(pos_v),          // Use internal position counters
         .hblank(hblank),

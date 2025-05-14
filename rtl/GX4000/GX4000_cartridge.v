@@ -103,6 +103,7 @@ always @(posedge clk_sys) begin
         byte_count <= 0;
         block_offset <= 0;
         filling_zeros <= 0;
+        plus_bios_valid <= 0;  // Initialize to invalid
     end
     if (ioctl_download && ioctl_wr && is_cpr) begin
         rom_wr <= 0;  // Default state
@@ -169,6 +170,7 @@ always @(posedge clk_sys) begin
                         chunk_id <= 0;
                         valid_header <= 1;
                         retry_count <= 0;  // Reset retry counter on success
+                        //plus_bios_valid <= 1;  // Set valid when we have a valid exec address
                         $display("DEBUG: Found AMS signature!");
                     end else begin
                         // Increment retry counter and check limit
@@ -288,6 +290,7 @@ always @(posedge clk_sys) begin
                             case (bytes_read)
                                 1: begin
                                     version <= ioctl_dout;
+                                    plus_bios_version <= ioctl_dout;  // Store version
                                     $display("DEBUG: Format version: %h", ioctl_dout);
                                 end
                                 2: begin
@@ -300,6 +303,7 @@ always @(posedge clk_sys) begin
                                 end
                                 4: begin
                                     load_addr[15:8] <= ioctl_dout;
+                                    plus_bios_checksum <= {ioctl_dout, load_addr[7:0]};  // Store checksum
                                     $display("DEBUG: Load address: %h", {ioctl_dout, load_addr[7:0]});
                                 end
                                 5: begin
@@ -312,6 +316,8 @@ always @(posedge clk_sys) begin
                                     if ({ioctl_dout, exec_addr[7:0]} != 16'h0000) begin
                                         auto_boot_en <= 1;
                                         boot_vector <= {ioctl_dout, exec_addr[7:0]};
+                                        plus_bios_valid <= 1;  // Set valid when we have a valid exec address
+                                        $display("DEBUG: Setting plus_bios_valid=1, exec_addr=%h", {ioctl_dout, exec_addr[7:0]});
                                     end
                                 end
                                 default: begin
