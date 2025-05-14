@@ -7,9 +7,10 @@ module PlusMode
     
     // CPU interface
     input  [15:0] cpu_addr,
-    input   [7:0] cpu_data,
+    input   [7:0] cpu_data_in,   // Rename to cpu_data_in
     input         cpu_wr,
     input         cpu_rd,
+    output  [7:0] cpu_data_out,  // Add output for data bus
     
     // Video interface
     input   [1:0] r_in,
@@ -94,7 +95,7 @@ module PlusMode
         .reset(reset),
         .plus_mode(plus_mode),
         .cpu_addr(cpu_addr),
-        .cpu_data(cpu_data),
+        .cpu_data(cpu_data_in),  // Use cpu_data_in
         .cpu_wr(cpu_wr),
         .cpu_rd(cpu_rd),
         .io_dout(io_dout),
@@ -112,7 +113,7 @@ module PlusMode
         
         // CPU interface
         .cpu_addr(cpu_addr),
-        .cpu_data(cpu_data),
+        .cpu_data(cpu_data_in),  // Use cpu_data_in
         .cpu_wr(cpu_wr),
         .cpu_rd(cpu_rd),
         
@@ -134,7 +135,12 @@ module PlusMode
         .collision_reg(collision_reg)
     );
 
-    // Advanced Cartridge Interface Device (ACID) module instance
+    // CRTC write handling
+    wire crtc_write = cpu_wr && cpu_addr[15:8] == 8'hBC && cpu_data_in > 8'h10;  // Use cpu_data_in
+    wire crtc_read = cpu_rd && cpu_addr[15:8] == 8'hBC;
+
+    // ACID module instance
+    wire [7:0] acid_data_out;  // Add wire for ACID data output
     GX4000_ACID acid_inst
     (
         .clk_sys(clk_sys),
@@ -143,10 +149,10 @@ module PlusMode
         
         // CPU interface
         .cpu_addr(cpu_addr),
-        .cpu_data_in(cpu_data),
-        .cpu_wr(cpu_wr),
-        .cpu_rd(cpu_rd),
-        .cpu_data_out(),
+        .cpu_data_in(cpu_data_in),  // Use cpu_data_in
+        .cpu_wr(cpu_wr && crtc_write),  // Don't process CRTC writes in ACID
+        .cpu_rd(cpu_rd && crtc_read),   // Don't process CRTC reads in ACID
+        .cpu_data_out(acid_data_out),  // Connect ACID data output
         
         // Status outputs
         .asic_valid(asic_valid),
@@ -160,7 +166,7 @@ module PlusMode
         .reset(reset),
         .plus_mode(plus_mode & use_asic),
         .cpu_addr(cpu_addr),
-        .cpu_data(cpu_data),
+        .cpu_data(cpu_data_in),  // Use cpu_data_in
         .cpu_wr(cpu_wr),
         .cpu_rd(cpu_rd),
         .cpc_audio_l(cpc_audio_l),
@@ -215,4 +221,20 @@ module PlusMode
         .plus_bios_version(plus_bios_version)
     );
 
+    // Connect ACID data to CPU data bus when reading from BC00
+    wire acid_read = cpu_rd && cpu_addr == 16'hBC00 && plus_mode && use_asic;
+    wire [7:0] acid_data = acid_read ? acid_data_out : 8'h00;
+
+    // Connect data sources to CPU data bus
+    assign cpu_data_out = acid_read ? acid_data : 8'h00;  // Drive output with ACID data when reading from BC00
+
+/*
+    // Debug output for ACID reads
+    always @(posedge clk_sys) begin
+        if (acid_read) begin
+            $display("[PlusMode] ACID read from BC00: data=%h, plus_mode=%b, use_asic=%b", 
+                    acid_data_out, plus_mode, use_asic);
+        end
+    end
+*/
 endmodule 

@@ -170,8 +170,8 @@ always @(posedge clk_sys) begin
                         chunk_id <= 0;
                         valid_header <= 1;
                         retry_count <= 0;  // Reset retry counter on success
-                        //plus_bios_valid <= 1;  // Set valid when we have a valid exec address
-                        $display("DEBUG: Found AMS signature!");
+                        plus_bios_valid <= 1;  // Set valid when we have a valid AMS signature
+                        $display("DEBUG: Found AMS signature! Setting plus_bios_valid=1");
                     end else begin
                         // Increment retry counter and check limit
                         retry_count <= retry_count + 1;
@@ -207,7 +207,7 @@ always @(posedge clk_sys) begin
                     reg [7:0]  block_num = id[7:0];
                     
                     if (id == FMT_SIG) begin
-                        $display("DEBUG: Found format chunk");
+                        $display("DEBUG: Found format chunk - ID=%h", id);
                         state <= S_DATA;
                         byte_count <= 0;
                         chunk_size <= 0;
@@ -237,7 +237,8 @@ always @(posedge clk_sys) begin
                     end
                     else begin
                         // Unknown chunk - skip to next chunk header
-                        $display("DEBUG: Unknown chunk ID %h, searching for next valid chunk", id);
+                        $display("DEBUG: Unknown chunk ID %h (prefix=%h, block=%h), searching for next valid chunk", 
+                                id, prefix, block_num);
                         state <= S_CHUNK;
                         byte_count <= 0;
                         chunk_id <= 0;
@@ -287,6 +288,7 @@ always @(posedge clk_sys) begin
                     
                     case (chunk_id)
                         FMT_SIG: begin
+                            $display("DEBUG: Processing format chunk data - byte %d of %d", bytes_read, chunk_size);
                             case (bytes_read)
                                 1: begin
                                     version <= ioctl_dout;
@@ -318,12 +320,14 @@ always @(posedge clk_sys) begin
                                         boot_vector <= {ioctl_dout, exec_addr[7:0]};
                                         plus_bios_valid <= 1;  // Set valid when we have a valid exec address
                                         $display("DEBUG: Setting plus_bios_valid=1, exec_addr=%h", {ioctl_dout, exec_addr[7:0]});
+                                    end else begin
+                                        $display("DEBUG: Not setting plus_bios_valid - exec_addr is 0");
                                     end
                                 end
                                 default: begin
                                     if (bytes_read >= chunk_size) begin
                                         state <= S_CHUNK;
-                                        $display("DEBUG: Format chunk complete");
+                                        $display("DEBUG: Format chunk complete - plus_bios_valid=%b", plus_bios_valid);
                                     end
                                 end
                             endcase

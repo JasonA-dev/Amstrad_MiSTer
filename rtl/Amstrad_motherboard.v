@@ -129,7 +129,7 @@ tv80s CPU
 	.halt_n(),
 	.busak_n(),
 	.A(A),
-	.di(crtc_dout & ppi_dout & cpu_din),
+	.di(di),
 	.dout(D)
 );
 `else
@@ -143,7 +143,7 @@ T80pa CPU
 
 	.a(A),
 	.do(D),
-	.di(crtc_dout & ppi_dout & cpu_din),
+	.di(di),
 
 	.rd_n(RD_n),
 	.wr_n(WR_n),
@@ -375,5 +375,40 @@ hid HID
 	.key_reset(key_reset),
 	.Fn(Fn)
 );
+
+// ACID data handling
+wire acid_read = cpu_addr == 16'hBC00 && plus_mode;
+wire [7:0] acid_data = acid_read ? cpu_din : 8'h00;  // Capture ACID data from CPU input
+
+// CRTC read handling
+wire crtc_read = io_rd && A[15:8] == 8'hBC;
+wire [7:0] crtc_data = crtc_read ? crtc_dout : 8'h00;
+
+// PPI read handling
+wire ppi_read = io_rd && A[15:8] == 8'hF7;
+wire [7:0] ppi_data = ppi_read ? ppi_dout : 8'h00;
+
+// RAM read handling
+wire ram_read = mem_rd;
+wire [7:0] ram_data = ram_read ? vram_din[7:0] : 8'h00;
+
+/*
+// Debug output for ACID reads
+always @(posedge clk) begin
+	if (acid_read && rd) begin
+		$display("[Motherboard] ACID read from BC00: data=%h, plus_mode=%b", 
+				acid_data, plus_mode);
+	end
+end
+*/
+
+// Connect data to CPU - use tri-state buffer instead of direct assignment
+wire [7:0] combined_data = acid_read ? acid_data : 
+						  (crtc_read ? crtc_data : 
+						  (ppi_read ? ppi_data : 
+						  (ram_read ? ram_data : 8'hFF)));
+
+// Use tri-state buffer for data bus
+assign D = (rd) ? combined_data : 8'hZZ;
 
 endmodule
