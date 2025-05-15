@@ -110,9 +110,6 @@ wire RFSH_n;
 wire INT_n;
 wire M1_n;
 
-// CPU data input connection
-wire [7:0] di;
-
 `ifdef VERILATOR
 tv80s CPU
 (
@@ -378,14 +375,5 @@ hid HID
 	.key_reset(key_reset),
 	.Fn(Fn)
 );
-
-// Data input multiplexing
-assign di = ~RD_n ? (  // When reading
-    ~IORQ_n ? (        // I/O read
-        ~A[14] ? crtc_dout :  // CRTC read
-        ~A[11] ? ppi_dout :   // PPI read
-        8'hFF                  // Default for other I/O reads
-    ) : cpu_din        // Memory read
-) : 8'hFF;             // Not reading
 
 endmodule

@@ -32,7 +32,6 @@ reg ce_pix;
 reg plus_rom_loaded = 0;
 reg plus_valid = 0;
 reg old_download = 0;
-reg use_asic = 0;  // Add use_asic register
 //----------------------------------------------------------------
 // Keyboard logic (unchanged)
 reg         key_strobe;
@@ -120,14 +119,12 @@ always @(posedge clk_48) begin
     // Handle download completion
     if (ioctl_downlD && !ioctl_download) begin
         rom_loaded <= 1;
-        if (plus_download && plus_valid) begin
+        if (plus_download & plus_valid) begin
             plus_mode <= 1;
-            use_asic <= 1;  // Set use_asic when plus_mode is set
-            $display("DEBUG: Setting plus_mode=1 and use_asic=1");
         end
         download_started <= 0;
-        $display("DEBUG: Download complete at addr=%h, plus_download=%b, plus_valid=%b, plus_mode=%b, use_asic=%b", 
-                 download_addr, plus_download, plus_valid, plus_mode, use_asic);
+        $display("DEBUG: Download complete at addr=%h, plus_download=%b, plus_valid=%b", 
+                 download_addr, plus_download, plus_valid);
     end
     
     // Only reset when explicitly requested
@@ -135,22 +132,12 @@ always @(posedge clk_48) begin
         RESET <= 1;
         rom_loaded <= 0;
         plus_mode <= 0;
-        use_asic <= 0;  // Reset use_asic
         download_started <= 0;
         download_addr <= 0;
         last_addr <= 0;
-        $display("DEBUG: External reset requested - plus_mode=%b use_asic=%b", plus_mode, use_asic);
+        $display("DEBUG: External reset requested");
     end
 end
-
-/*
-// Add ACID debug output
-always @(posedge clk_48) begin
-    if (plus_mode && use_asic) begin
-        $display("DEBUG: Plus mode active - plus_mode=%b use_asic=%b", plus_mode, use_asic);
-    end
-end
-*/
 //----------------------------------------------------------------
 
 // ROM Memory Map:
@@ -162,10 +149,10 @@ end
 // Memory interface
 wire        ram_ready;
 wire [22:0] ram_a;
-wire [7:0]  ram_dout;
+wire  [7:0] ram_dout;
 wire        ram_rd;
 wire        ram_we;
-wire [7:0]  cpu_dout;
+wire  [7:0] cpu_dout;
 
 // Memory loading logic
 wire        rom_download = ioctl_download && (ioctl_index[4:0] < 4);
@@ -265,7 +252,7 @@ wire        io_rd = rd & iorq;
 wire        io_wr = wr & iorq;
 
 // Multiface Two implementation
-wire [7:0]  mf2_dout = (mf2_ram_en & mem_rd) ? mf2_ram_out : 8'hFF;
+wire  [7:0] mf2_dout = (mf2_ram_en & mem_rd) ? mf2_ram_out : 8'hFF;
 
 reg         mf2_nmi = 0;
 reg         mf2_en = 0;
@@ -458,12 +445,10 @@ PlusMode cart_inst
     .clk_sys(clk_48),
     .reset(RESET),
     .plus_mode(plus_mode),
-    .use_asic(1'b1),  // Enable ASIC by default
     
     // CPU interface
     .cpu_addr(cpu_addr),
-    .cpu_data_in(cpu_dout),    // Connect CPU data output to PlusMode input
-    .cpu_data_out(),           // Leave unconnected as it's not used
+    .cpu_data(cpu_dout),
     .cpu_wr(wr),
     .cpu_rd(rd),
     
@@ -512,7 +497,10 @@ PlusMode cart_inst
     .audio_status(),
     
     // Plus-specific outputs
-    .plus_bios_valid(plus_valid)
+    .plus_bios_valid(plus_valid),
+    
+    // Video source selection - enable ASIC in Plus mode
+    .use_asic(1'b1)
 );
 
 // Connect motherboard outputs to intermediate signals

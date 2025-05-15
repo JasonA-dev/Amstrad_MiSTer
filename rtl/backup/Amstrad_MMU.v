@@ -69,14 +69,21 @@ always @(posedge CLK) begin
 
 			// ROM bank selection handling for Plus mode
 			if (~A[13]) begin
-				ROMbank <= rom_map[D] ? D : 8'h00;
+				if (active_plus_mode && D == 8'h07) begin
+					// Special case: When in Plus mode and selecting ROM 7,
+					// use Plus ROM area
+					ROMbank <= 8'h07;
+				end
+				else begin
+					// Normal ROM selection for other cases
+					ROMbank <= rom_map[D] ? D : 8'h00;
+				end
 			end
 		end
 	end
 end
 
-always @(posedge CLK) begin
-	/*
+always @(*) begin
 	if (active_plus_mode) begin
 		// Unified Plus mode mapping
 		casex({romen_n, A[15:14]})
@@ -94,6 +101,7 @@ always @(posedge CLK) begin
 				else
 					ram_A[22:14] = {1'b1, ROMbank};    // Other ROM banks (standard mapping)
 			end
+			
 			// Standard RAM mapping for compatibility
 			default: begin
 				ram_A[22:14] = {2'b00, 5'd2, A[15:14]}; // Standard 64KB mapping
@@ -101,7 +109,6 @@ always @(posedge CLK) begin
 		endcase
 	end
 	else begin
-	*/
 		// Standard CPC mapping
 		casex({romen_n, RAMmap, A[15:14]})
 			'b0_xxx_xx: ram_A[22:14] = {9{A[15]}} & {1'b1, ROMbank};  // lower/upper rom
@@ -111,19 +118,9 @@ always @(posedge CLK) begin
 			'b1_1xx_01: ram_A[22:14] = {2'b00, RAMpage, RAMmap[1:0]}; // map4-7 bank1   (ext  0..3)
 			   default: ram_A[22:14] = {2'b00,    5'd2,    A[15:14]}; // base 64KB map  (base 0..3)
 		endcase
-	//end
+	end
 
 	ram_A[13:0] = A[13:0];
 end
-
-/*
-// Add debug output for memory access
-always @(posedge CLK) begin
-	if (!romen_n) begin
-		$display("[MMU] ROM access: addr=%h mapped_to=%h bank=%h", 
-				A, ram_A, ROMbank);
-	end
-end
-*/
 
 endmodule
