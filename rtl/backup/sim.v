@@ -6,9 +6,9 @@ module top (
     input              inputs,
     
     // Video output
-    output wire [5:0]  VGA_R,
-    output wire [5:0]  VGA_G,
-    output wire [5:0]  VGA_B,
+    output wire [3:0]  VGA_R,
+    output wire [3:0]  VGA_G,
+    output wire [3:0]  VGA_B,
     output wire        VGA_HS,
     output wire        VGA_VS,
     output wire        VGA_HB,
@@ -522,14 +522,6 @@ assign VGA_VS = ~vs;  // Invert for VGA
 assign VGA_HB = hbl;
 assign VGA_VB = vbl;
 
-/*
-// Add debug output for cartridge writes
-always @(posedge clk_48) begin
-    if (cart_wr) begin
-        $display("DEBUG: Cartridge write to SDRAM - addr=%h data=%h", cart_addr[22:0], cart_data);
-    end
-end
-*/
 // SDRAM interface
 mock_sdram sdram
 (

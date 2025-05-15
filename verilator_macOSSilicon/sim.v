@@ -32,7 +32,6 @@ reg ce_pix;
 reg plus_rom_loaded = 0;
 reg plus_valid = 0;
 reg old_download = 0;
-reg use_asic = 0;  // Add use_asic register
 //----------------------------------------------------------------
 // Keyboard logic (unchanged)
 reg         key_strobe;
@@ -104,7 +103,7 @@ always @(posedge clk_48) begin
         if (!download_started) begin
             download_started <= 1;
             download_addr <= 0;  // Start from 0
-            $display("DEBUG: Starting new download");
+            //$display("DEBUG: Starting new download - index=%h, addr=%h", ioctl_index, ioctl_addr);
         end else begin
             download_addr <= download_addr + 1;
         end
@@ -113,21 +112,19 @@ always @(posedge clk_48) begin
     
     // Come out of reset when ROM or CPR download starts
     if (ioctl_download && !ioctl_downlD) begin
-        $display("DEBUG: Download starting, releasing reset");
+        //$display("DEBUG: Download starting, releasing reset - index=%h", ioctl_index);
         RESET <= 0;
     end
     
     // Handle download completion
     if (ioctl_downlD && !ioctl_download) begin
         rom_loaded <= 1;
-        if (plus_download && plus_valid) begin
+        if (plus_download & plus_valid) begin
             plus_mode <= 1;
-            use_asic <= 1;  // Set use_asic when plus_mode is set
-            $display("DEBUG: Setting plus_mode=1 and use_asic=1");
         end
         download_started <= 0;
-        $display("DEBUG: Download complete at addr=%h, plus_download=%b, plus_valid=%b, plus_mode=%b, use_asic=%b", 
-                 download_addr, plus_download, plus_valid, plus_mode, use_asic);
+        $display("DEBUG: Download complete at addr=%h, plus_download=%b, plus_valid=%b, index=%h", 
+                 download_addr, plus_download, plus_valid, ioctl_index);
     end
     
     // Only reset when explicitly requested
@@ -135,22 +132,22 @@ always @(posedge clk_48) begin
         RESET <= 1;
         rom_loaded <= 0;
         plus_mode <= 0;
-        use_asic <= 0;  // Reset use_asic
         download_started <= 0;
         download_addr <= 0;
         last_addr <= 0;
-        $display("DEBUG: External reset requested - plus_mode=%b use_asic=%b", plus_mode, use_asic);
+        $display("DEBUG: External reset requested - plus_mode=%b", plus_mode);
     end
 end
 
 /*
 // Add ACID debug output
 always @(posedge clk_48) begin
-    if (plus_mode && use_asic) begin
-        $display("DEBUG: Plus mode active - plus_mode=%b use_asic=%b", plus_mode, use_asic);
+    if (plus_mode) begin
+        $display("DEBUG: Plus mode active - plus_mode=%b", plus_mode);
     end
 end
 */
+
 //----------------------------------------------------------------
 
 // ROM Memory Map:
@@ -168,7 +165,7 @@ wire        ram_we;
 wire [7:0]  cpu_dout;
 
 // Memory loading logic
-wire        rom_download = ioctl_download && (ioctl_index[4:0] < 4);
+wire        rom_download = ioctl_download && (ioctl_index[4:0] < 4);  // ROM files (0-3: OS, BASIC, AMSDOS, MF2)
 wire        tape_download = ioctl_download && (ioctl_index == 4);
 wire        plus_cpr_download = ioctl_download && (ioctl_index == 5);  // F5 - CPR files
 wire        plus_bin_download = ioctl_download && (ioctl_index == 6);  // F6 - BIN files
@@ -191,20 +188,44 @@ always @(posedge clk_48) begin
     if(ioctl_download & ioctl_wr) begin
         boot_wr <= 0;
         
+        // Add debug output for all ioctl writes
+        $display("DEBUG: MMU ioctl write - index=%h, addr=%h, data=%h, rom_download=%b", 
+                 ioctl_index, ioctl_addr, ioctl_dout, rom_download);
+        
         // Handle different file types
-        if (rom_download && ioctl_addr[24:16] < 9'h100) begin
-            boot_wr <= 1;
+        if (rom_download) begin  // Remove the address range check since it's handled in the case statement
+            boot_wr <= 1;  // Set boot_wr immediately for ROM writes
             boot_dout <= ioctl_dout;
             boot_a[13:0] <= ioctl_addr[13:0];
             
+            $display("DEBUG: ROM write - index=%h, addr=%h, data=%h, boot_a=%h, boot_wr=%b", 
+                     ioctl_index, ioctl_addr, ioctl_dout, boot_a, boot_wr);
+            
             case(ioctl_addr[24:14])
-                0: boot_a[22:14] <= 9'h000; // OS6128
-                1: boot_a[22:14] <= 9'h100; // BASIC1.1
-                2: boot_a[22:14] <= 9'h107; // AMSDOS
-                3: boot_a[22:14] <= 9'h0ff; // MF2
-                default: boot_wr <= 0;
+                0: begin 
+                    boot_a[22:14] <= 9'h000; // OS6128
+                    $display("DEBUG: Mapping to OS6128 region - boot_a=%h", boot_a);
+                end
+                1: begin 
+                    boot_a[22:14] <= 9'h100; // BASIC1.1
+                    $display("DEBUG: Mapping to BASIC1.1 region - boot_a=%h", boot_a);
+                end
+                2: begin 
+                    boot_a[22:14] <= 9'h107; // AMSDOS
+                    $display("DEBUG: Mapping to AMSDOS region - boot_a=%h", boot_a);
+                end
+                3: begin 
+                    boot_a[22:14] <= 9'h0ff; // MF2
+                    $display("DEBUG: Mapping to MF2 region - boot_a=%h", boot_a);
+                end
+                default: begin
+                    boot_wr <= 0;
+                    $display("DEBUG: Invalid ROM region - addr=%h", ioctl_addr);
+                end
             endcase
         end
+    end else begin
+        boot_wr <= 0;  // Clear boot_wr when not writing
     end
     
     if(boot_wr && boot_a[22]) begin
@@ -354,11 +375,26 @@ wire [1:0]  b;
 wire        VGA_F1;
 
 // Internal signals for Plus mode output
-wire [1:0] plus_r, plus_g, plus_b;
+wire [3:0] plus_r, plus_g, plus_b;
 wire [7:0] plus_audio_l, plus_audio_r;
 
 // Memory interface signals
 wire [7:0]  cpu_din = ram_dout & mf2_dout;  // Add MF2 data to CPU input
+
+// Add ROM download data tracking
+reg [7:0] rom_data = 0;
+reg rom_data_valid = 0;
+
+// Track ROM download data
+always @(posedge clk_48) begin
+    if (ioctl_download && ioctl_wr && rom_download) begin
+        rom_data <= ioctl_dout;
+        rom_data_valid <= 1;
+        $display("DEBUG: ROM data captured - data=%h, valid=%b", ioctl_dout, rom_data_valid);
+    end else begin
+        rom_data_valid <= 0;
+    end
+end
 
 // Video memory interface signals
 wire [14:0] vram_addr;
@@ -381,6 +417,35 @@ wire        tape_data_ack = 0;
 wire [7:0]  tape_din = 8'h00;
 wire        tape_wr = 0;
 wire        tape_wr_ack = 0;
+
+// Add ROM download address tracking
+reg [22:0] rom_addr = 0;
+reg rom_addr_valid = 0;
+
+// Track ROM download address
+always @(posedge clk_48) begin
+    if (ioctl_download && ioctl_wr && rom_download) begin
+        rom_addr <= ioctl_addr[22:0];  // Use full ioctl address
+        rom_addr_valid <= 1;
+        $display("DEBUG: ROM address captured - addr=%h, valid=%b", ioctl_addr[22:0], rom_addr_valid);
+    end else begin
+        rom_addr_valid <= 0;
+    end
+end
+
+// Add ROM download write tracking
+reg rom_write_en = 0;
+
+// Track ROM download write enable
+always @(posedge clk_48) begin
+    if (ioctl_download && ioctl_wr && rom_download) begin
+        rom_write_en <= 1;
+        $display("DEBUG: ROM write enable set - valid=%b, index=%h, addr=%h, data=%h", 
+                 rom_write_en, ioctl_index, ioctl_addr, ioctl_dout);
+    end else begin
+        rom_write_en <= 0;
+    end
+end
 
 // Add back Amstrad motherboard instantiation
 Amstrad_motherboard motherboard
@@ -458,7 +523,7 @@ PlusMode cart_inst
     .clk_sys(clk_48),
     .reset(RESET),
     .plus_mode(plus_mode),
-    .use_asic(1'b1),  // Enable ASIC by default
+    .use_asic(1'b1),  // Keep this as it's required by the module interface
     
     // CPU interface
     .cpu_addr(cpu_addr),
@@ -520,15 +585,11 @@ wire [1:0] mb_r = r;
 wire [1:0] mb_g = g;
 wire [1:0] mb_b = b;
 
-// Final video outputs
-wire [1:0] final_r = plus_mode ? plus_r : mb_r;
-wire [1:0] final_g = plus_mode ? plus_g : mb_g;
-wire [1:0] final_b = plus_mode ? plus_b : mb_b;
+// Video output conversion - handle both 12-bit color in Plus mode and 2-bit color in standard mode
+assign VGA_R = plus_mode ? plus_r[3:0] : {mb_r, mb_r, mb_r};
+assign VGA_G = plus_mode ? plus_g[3:0] : {mb_g, mb_g, mb_g};
+assign VGA_B = plus_mode ? plus_b[3:0] : {mb_b, mb_b, mb_b};
 
-// Video output conversion - expanding 2-bit color to 6-bit
-assign VGA_R = {final_r, final_r, final_r};
-assign VGA_G = {final_g, final_g, final_g};
-assign VGA_B = {final_b, final_b, final_b};
 assign VGA_HS = ~hs;  // Invert for VGA
 assign VGA_VS = ~vs;  // Invert for VGA
 assign VGA_HB = hbl;
@@ -563,13 +624,13 @@ mock_sdram sdram
     .clk(clk_48),
     .clkref(ce_ref),
 
-    // Memory interface - prioritize cartridge writes but don't block other operations
+    // Memory interface - prioritize ROM writes during reset
     .oe(RESET ? 1'b0 : mem_rd & ~mf2_ram_en),  // Allow reads during cartridge writes
-    .we(RESET ? boot_wr : (cart_wr | (mem_wr & ~mf2_ram_en & ~mf2_rom_en))),  // Prioritize cart writes
-    .addr(cart_wr ? cart_addr[22:0] : (RESET ? boot_a : 
-          mf2_rom_en ? { 9'h0ff, cpu_addr[13:0] } : ram_a)),
+    .we(RESET ? (rom_write_en | (boot_wr & rom_download)) : (cart_wr | (mem_wr & ~mf2_ram_en & ~mf2_rom_en))),  // Enable ROM writes during reset
+    .addr(RESET ? (rom_addr_valid ? rom_addr : boot_a) : (cart_wr ? cart_addr[22:0] : 
+          mf2_rom_en ? { 9'h0ff, cpu_addr[13:0] } : ram_a)),  // Use ROM address during reset if valid
     .bank(2'b00),  // Cartridge data goes to bank 0
-    .din(cart_wr ? cart_data : (RESET ? boot_dout : cpu_dout)),
+    .din(RESET ? (rom_data_valid ? rom_data : boot_dout) : (cart_wr ? cart_data : cpu_dout)),  // Use ROM data during reset if valid
     .dout(ram_dout),
 
     // Video memory access
@@ -585,5 +646,13 @@ mock_sdram sdram
     .tape_rd(1'b0),
     .tape_rd_ack()
 );
+
+// Add debug output for write enable signal
+always @(posedge clk_48) begin
+    if (RESET && (rom_write_en | (boot_wr & rom_download))) begin
+        $display("DEBUG: SDRAM Write Enable Active - rom_write_en=%b, boot_wr=%b, rom_download=%b", 
+                 rom_write_en, boot_wr, rom_download);
+    end
+end
 
 endmodule

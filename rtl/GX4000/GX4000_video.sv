@@ -18,9 +18,9 @@ module GX4000_video
     input         vblank,
     
     // Video output
-    output  [1:0] r_out,
-    output  [1:0] g_out,
-    output  [1:0] b_out,
+    output  [3:0] r_out,
+    output  [3:0] g_out,
+    output  [3:0] b_out,
     
     // Sprite interface outputs (for audio module)
     output        sprite_active,
@@ -28,14 +28,25 @@ module GX4000_video
     output  [7:0] collision_reg
 );
 
-    // Color palette registers
-    reg [23:0] palette[0:31]; // 32 colors, 24-bit RGB
+    // Color palette registers - 12-bit colors (4 bits per component)
+    reg [11:0] primary_palette[0:31];   // Primary palette (6400-643F)
+    reg [11:0] secondary_palette[0:31]; // Secondary palette (7Fxx)
     
     // Video registers
     reg [7:0] screen_x;
     reg [7:0] screen_y;
     reg [7:0] video_mode;
     reg [7:0] collision_flags;
+    
+    // Mode and ROM Enable Register (MRER)
+    reg [4:0] mrer_mode;      // Mode selection (bits 4:0)
+    reg       mrer_rom_en;    // ROM enable bit
+    reg       mrer_plus_mode; // Plus mode enable bit
+    reg       mrer_enhanced;  // Enhanced mode enable bit
+    
+    // Simplified mode selection
+    wire is_enhanced_mode = mrer_enhanced || plus_mode;
+    wire is_plus_mode = plus_mode || mrer_plus_mode;
     
     // Video state
     reg [1:0] r_reg;
@@ -52,7 +63,7 @@ module GX4000_video
     
     // Configuration presets
     reg [7:0] config_preset;
-    reg [7:0] config_load[0:7];
+    reg [7:0] config_load[0:7][0:5];  // 8 presets, each with 6 config values
     
     // Previous color registers for effects
     reg [7:0] r_reg_prev;
@@ -80,61 +91,56 @@ module GX4000_video
     // Internal sprite signals
     wire [7:0] sprite_pixel;
     
-    // Generate position counters
-    always @(posedge clk_sys) begin
-        if (reset) begin
-            pos_h <= 9'd0;
-            pos_v <= 9'd0;
-        end else begin
-            if (hblank) begin
-                pos_h <= 9'd0;
-                if (vblank)
-                    pos_v <= 9'd0;
-                else if (!vblank)
-                    pos_v <= pos_v + 1'd1;
-            end else begin
-                pos_h <= pos_h + 1'd1;
-            end
+    // Video processing signals
+    wire [11:0] color;
+    wire [7:0] grey;
+    
+    // Calculate color and grey scale values
+    wire [4:0] color_index = {r_in, g_in, b_in};  // 3 bits for color selection
+    wire [11:0] active_palette = mrer_enhanced ? secondary_palette[color_index] : primary_palette[color_index];
+    assign color = active_palette;
+    assign grey = (color[11:8] * 9 + color[7:4] * 3 + color[3:0]) / 13;
+    
+    // Initialize palettes with default colors
+    initial begin
+        // Initialize with default CPC colors
+        primary_palette[0]  = 12'h000; // Black
+        primary_palette[1]  = 12'h00F; // Blue
+        primary_palette[2]  = 12'h0F0; // Green
+        primary_palette[3]  = 12'h0FF; // Cyan
+        primary_palette[4]  = 12'hF00; // Red
+        primary_palette[5]  = 12'hF0F; // Magenta
+        primary_palette[6]  = 12'hFF0; // Yellow
+        primary_palette[7]  = 12'hFFF; // White
+        primary_palette[8]  = 12'h000; // Black
+        primary_palette[9]  = 12'h00F; // Blue
+        primary_palette[10] = 12'h0F0; // Green
+        primary_palette[11] = 12'h0FF; // Cyan
+        primary_palette[12] = 12'hF00; // Red
+        primary_palette[13] = 12'hF0F; // Magenta
+        primary_palette[14] = 12'hFF0; // Yellow
+        primary_palette[15] = 12'hFFF; // White
+        
+        // Initialize secondary palette with same default colors
+        for (integer i = 0; i < 32; i = i + 1) begin
+            secondary_palette[i] = primary_palette[i & 15];  // Mirror primary palette initially
         end
     end
     
-    //////////////////////////////////////////////////////////////////////////////
-    // Sprite Module Instance
-    //////////////////////////////////////////////////////////////////////////////
+    // Palette pointer for 7Fxx writes
+    reg [4:0] palette_pointer;  // Changed to 5 bits to properly handle 0-31 range
     
-    // Connect to the enhanced sprite module
-    GX4000_sprite sprite_inst
-    (
-        .clk_sys(clk_sys),
-        .reset(reset),
-        .plus_mode(plus_mode),
-        
-        // CPU interface
-        .cpu_addr(cpu_addr),
-        .cpu_data(cpu_data),
-        .cpu_wr(cpu_wr),
-        .cpu_rd(cpu_rd),
-        
-        // Video interface
-        .hpos(pos_h),          // Use internal position counters
-        .vpos(pos_v),          // Use internal position counters
-        .hblank(hblank),
-        .vblank(vblank),
-        .sprite_pixel(sprite_pixel),
-        .sprite_active(sprite_active),
-        .sprite_id(sprite_id),
-        .config_sprite(config_sprite),
-        .collision_flags(sprite_collision_flags)  // Renamed to avoid multiple drivers
-    );
+    // Add latches for palette writes
+    reg [3:0] palette_latch_r;
+    reg [3:0] palette_latch_g;
     
-    // Create a wire for sprite collision flags to avoid multiple drivers
-    wire [7:0] sprite_collision_flags;
-    
-    // Video processing
+    // Video processing with proper grey scale weighting
+    reg [11:0] selected_palette;
     always @(posedge clk_sys) begin
         if (reset) begin
             for (integer i = 0; i < 32; i = i + 1) begin
-                palette[i] <= 24'h000000;
+                primary_palette[i] <= 12'h000;
+                secondary_palette[i] <= 12'h000;
             end
             screen_x <= 8'h00;
             screen_y <= 8'h00;
@@ -155,189 +161,297 @@ module GX4000_video
             
             // Initialize presets
             for (integer i = 0; i < 8; i = i + 1) begin
-                config_load[i] <= 8'h00;
+                for (integer j = 0; j < 6; j = j + 1) begin
+                    config_load[i][j] <= 8'h00;
+                end
             end
             r_reg_prev <= 8'h00;
             g_reg_prev <= 8'h00;
             b_reg_prev <= 8'h00;
             frame_counter <= 8'h00;
-        end else if (plus_mode) begin
-            // Register writes
-            if (cpu_wr) begin
-                case (cpu_addr[7:0])
-                    8'h80: screen_x <= 8'(cpu_data);
-                    8'h81: screen_y <= 8'(cpu_data);
-                    8'h82: video_mode <= 8'(cpu_data);
-                    8'h83: collision_flags <= 8'(cpu_data);
-                    
-                    // Configuration registers
-                    8'h90: config_mode <= 8'(cpu_data);
-                    8'h91: config_palette <= 8'(cpu_data);
-                    8'h92: config_sprite <= 8'(cpu_data);
-                    8'h93: config_video <= 8'(cpu_data);
-                    8'h94: config_audio <= 8'(cpu_data);
-                    8'h95: config_io <= 8'(cpu_data);
-                    8'h96: config_preset <= 8'(cpu_data);
-                    8'h98: config_load[cpu_addr[10:8]] <= 8'(cpu_data);
-                endcase
+            palette_pointer <= 5'h00;  // Initialize to 0
+        end else begin
+            // Debug output for CPU writes
+            if (cpu_wr && cpu_addr[15:14] == 2'b01) begin  // Only 0x4000-0x7FFF range
+                //$display("[GX4000_VIDEO] CPU Write: addr=%h data=%h wr=%b rd=%b", 
+                //        cpu_addr, cpu_data, cpu_wr, cpu_rd);
                 
-                // Palette writes
-                if (cpu_addr[15:8] == 8'h7F && cpu_addr[7:4] == 4'h6) begin
-                    palette[cpu_addr[3:0]] <= {cpu_data, 16'h0000};
+                // Debug palette writes
+                if (cpu_addr[15:6] == 10'h190) begin  // 6400-643F
+                    $display("[GX4000_VIDEO] Palette Write: addr=%h data=%h index=%d", 
+                            cpu_addr, cpu_data, cpu_addr[5:1]);
+                end
+                
+                // Palette pointer write (0x7F88, 0x7F89, 0x7F8A, 0x7F8B, etc. - mask lowest bit for mirrors)
+                if ((cpu_addr & 16'hFFFE) == 16'h7F88) begin
+                    palette_pointer <= cpu_data[4:0];
+                    $display("[GX4000_VIDEO] Palette Pointer Write: %d", cpu_data[4:0]);
+                end
+                // Palette RG write (0x7F89, 0x7F8B, etc. - mask lowest bit for mirrors)
+                else if ((cpu_addr & 16'hFFFE) == 16'h7F89) begin
+                    palette_latch_r <= cpu_data[7:4];
+                    palette_latch_g <= cpu_data[3:0];
+                    $display("[GX4000_VIDEO] Palette RG Latch: R=%h G=%h", cpu_data[7:4], cpu_data[3:0]);
+                end
+                // Palette B write/commit (0x7F8B, 0x7F8D, etc. - mask lowest bit for mirrors)
+                else if ((cpu_addr & 16'hFFFE) == 16'h7F8B) begin
+                    if (palette_pointer < 32) begin
+                        // Restore to default nibble order: {R, G, B}
+                        secondary_palette[palette_pointer] <= {palette_latch_r, palette_latch_g, cpu_data[7:4]};
+                        $display("[GX4000_VIDEO] Palette Commit (DEFAULT): idx=%d R=%h G=%h B=%h", palette_pointer, palette_latch_r, palette_latch_g, cpu_data[7:4]);
+                        $display("PALETTE WRITE: idx=%d val=%h (R=%h G=%h B=%h) at time %t", palette_pointer, {palette_latch_r, palette_latch_g, cpu_data[7:4]}, palette_latch_r, palette_latch_g, cpu_data[7:4], $time);
+                        palette_pointer <= palette_pointer + 1'b1; // Auto-increment pointer
+                    end
                 end
             end
             
-            // Video processing
-            if (!hblank && !vblank) begin
-                if (sprite_active) begin
-                    // Apply alpha blending for sprites
-                    // The sprite module now handles the effects and transformations
-                    r_reg <= 2'(palette[{sprite_pixel[7:5], 2'b00}][23:16]);
-                    g_reg <= 2'(palette[{sprite_pixel[4:2], 2'b00}][15:8]);
-                    b_reg <= 2'(palette[{sprite_pixel[1:0], 3'b000}][7:0]);
-                    
-                    // Collision detection
-                    if (collision_flags[sprite_id]) begin
-                        collision_flags[sprite_id] <= 1'b0;
-                    end else if (sprite_collision_flags[sprite_id]) begin
-                        // Update collision flags from sprite module
-                        collision_flags[sprite_id] <= sprite_collision_flags[sprite_id];
+            // Register writes
+            if (cpu_wr) begin
+                // Handle writes to video ASIC (0x4000-0x7FFF)
+                case (cpu_addr[15:12])
+                    4'h4: begin  // 4000h-4FFFh: Sprite image data
+                        if (cpu_addr[11:8] < 4'hF) begin  // Valid sprite number (0-14)
+                        //    $display("[GX4000_VIDEO] Sprite %d Image Data Write: addr=%h data=%h", 
+                        //            cpu_addr[11:8], cpu_addr, cpu_data);
+                        end
                     end
+                    
+                    4'h6: begin  // 6000h-6FFFh: Sprite control registers
+                        case (cpu_addr[11:0])
+                            12'h000, 12'h002, 12'h008, 12'h00A, 12'h010, 12'h012, 12'h018, 12'h01A,
+                            12'h020, 12'h022, 12'h028, 12'h02A, 12'h030, 12'h032, 12'h038, 12'h03A,
+                            12'h040, 12'h042, 12'h048, 12'h04A, 12'h050, 12'h052, 12'h058, 12'h05A,
+                            12'h060, 12'h062, 12'h068, 12'h06A, 12'h070, 12'h072, 12'h078, 12'h07A: begin
+                                // Sprite X/Y position registers
+                                //$display("[GX4000_VIDEO] Sprite %d Position Write: addr=%h data=%h", 
+                                        //cpu_addr[7:4], cpu_addr, cpu_data);
+                            end
+                            
+                            12'h004, 12'h00C, 12'h014, 12'h01C, 12'h024, 12'h02C, 12'h034, 12'h03C,
+                            12'h044, 12'h04C, 12'h054, 12'h05C, 12'h064, 12'h06C, 12'h074, 12'h07C: begin
+                                // Sprite magnification registers
+                                //$display("[GX4000_VIDEO] Sprite %d Magnification Write: addr=%h data=%h", 
+                                        //cpu_addr[7:4], cpu_addr, cpu_data);
+                            end
+                            
+                            12'h800: begin  // PRI - Programmable raster interrupt
+                            //    $display("[GX4000_VIDEO] Raster Interrupt Write: addr=%h data=%h", 
+                            //            cpu_addr, cpu_data);
+                            end
+                            
+                            12'h801: begin  // SPLT - Screen split scan line
+                            //      $display("[GX4000_VIDEO] Screen Split Write: addr=%h data=%h", 
+                            //              cpu_addr, cpu_data);
+                            end
+                            
+                            12'h802, 12'h803: begin  // SSA - Screen split secondary address
+                            //    $display("[GX4000_VIDEO] Screen Split Address Write: addr=%h data=%h", 
+                            //            cpu_addr, cpu_data);
+                            end
+                            
+                            12'h804: begin  // SSCR - Soft scroll control
+                            //    $display("[GX4000_VIDEO] Soft Scroll Control Write: addr=%h data=%h", 
+                            //            cpu_addr, cpu_data);
+                            end
+                            
+                            12'hC00, 12'hC02, 12'hC04, 12'hC06, 12'hC08, 12'hC0A: begin  // DMA channel registers
+                                //$display("[GX4000_VIDEO] DMA Channel %d Write: addr=%h data=%h", 
+                                        //cpu_addr[3:2], cpu_addr, cpu_data);
+                            end
+                            
+                            12'hC0F: begin  // DCSR - DMA control/status
+                                //$display("[GX4000_VIDEO] DMA Control/Status Write: addr=%h data=%h", 
+                                        //cpu_addr, cpu_data);
+                            end
+                        endcase
+                    end
+                    
+                    4'h7: begin  // 7000h-7FFFh: Configuration registers
+                        case (cpu_data[7:6])
+                            2'b00: begin  // Palette pointer register
+                                // Store the pointer value (bits 5:0) for next palette write
+                                //palette_pointer <= cpu_data[4:0];  // Only use lower 5 bits
+                                //$display("[GX4000_VIDEO] Secondary Palette Pointer Write: addr=%h data=%h (pointer=%d)", 
+                                //        cpu_addr, cpu_data, cpu_data[4:0]);
+                            end
+                            2'b01: begin  // Palette memory (secondary port)
+                                // In enhanced mode, we have full 12-bit color (4096 colors)
+                                // Format: RRRRGGGGBBBB (12 bits total)
+                                reg [11:0] new_color;
+                                if (plus_mode) begin  // Changed from mrer_enhanced to plus_mode
+                                    // Full 12-bit color mode
+                                    new_color = {
+                                        cpu_data[7:4],  // Red (4 bits)
+                                        cpu_data[3:0],  // Green (4 bits)
+                                        palette_pointer[3:0]  // Blue (4 bits)
+                                    };
+                                end else begin
+                                    // Standard 5-bit color mode
+                                    new_color = {
+                                        {cpu_data[7:5], 1'b0},  // Red (4 bits)
+                                        {cpu_data[4:2], 1'b0},  // Green (4 bits)
+                                        {cpu_data[1:0], 2'b00}  // Blue (4 bits)
+                                    };
+                                end
+                                
+                                if (palette_pointer < 32) begin  // Ensure valid range
+                                    secondary_palette[palette_pointer] <= new_color;
+                                    //$display("[GX4000_VIDEO] Secondary Palette Write: addr=%h data=%h (index=%d, color=%h, r=%h g=%h b=%h plus_mode=%b)", 
+                                    //        cpu_addr, cpu_data, palette_pointer, new_color,
+                                    //        new_color[11:8], new_color[7:4], new_color[3:0], plus_mode);
+                                    palette_pointer <= palette_pointer + 1'b1; // Auto-increment pointer
+                                end else begin
+                                    $display("[GX4000_VIDEO] Warning: Invalid palette pointer %d", palette_pointer);
+                                end
+                            end
+                            2'b10: begin  // Mode and ROM enable register (MRER) or Secondary ROM mapping register (RMR2)
+                                if (cpu_addr == 16'h7F8C) begin
+                                    // Special handling for 7F8C - can be either MRER or palette pointer
+                                    if (cpu_data[5] == 1'b0) begin
+                                        // MRER - Mode and ROM enable register
+                                        mrer_mode <= cpu_data[4:0];      // Store mode bits
+                                        mrer_rom_en <= cpu_data[6];      // Store ROM enable bit
+                                        mrer_plus_mode <= cpu_data[7];   // Store Plus mode bit
+                                        mrer_enhanced <= (cpu_data[4:0] == 5'h01) ||  // Enhanced video mode
+                                                        (cpu_data[4:0] == 5'h02) ||  // Sprite mode
+                                                        (cpu_data[4:0] == 5'h03) ||  // Combined mode
+                                                        (cpu_data[4:0] == 5'h04) ||  // Audio enhanced mode
+                                                        (cpu_data[4:0] == 5'h0C);    // Plus mode
+                                        
+                                        // Update video mode based on MRER
+                                        case (cpu_data[4:0])
+                                            5'h00: video_mode <= 8'h00;  // Standard CPC mode
+                                            5'h01: video_mode <= 8'h01;  // Enhanced video mode
+                                            5'h02: video_mode <= 8'h02;  // Sprite mode
+                                            5'h03: video_mode <= 8'h03;  // Combined enhanced video and sprite mode
+                                            5'h04: video_mode <= 8'h04;  // Audio enhanced mode
+                                            5'h0C: begin                 // Plus mode with enhanced features
+                                                video_mode <= 8'h05;     // Special Plus mode
+                                                // Enable Plus-specific features
+                                                config_mode[0] <= 1'b1;  // Enable enhanced features
+                                                config_palette[0] <= 1'b1; // Enable 32-color mode
+                                            end
+                                            default: begin
+                                                video_mode <= 8'h00;     // Default to standard mode
+                                                $display("[GX4000_VIDEO] Warning: Unknown mode %h selected, defaulting to standard mode", 
+                                                        cpu_data[4:0]);
+                                            end
+                                        endcase
+                                        
+                                        $display("[GX4000_VIDEO] Mode and ROM Enable Write: addr=%h data=%h (mode=%h rom_en=%b plus_mode=%b enhanced=%b)", 
+                                                cpu_addr, cpu_data, cpu_data[4:0], cpu_data[6], cpu_data[7], cpu_data[4:0] == 5'h01 || cpu_data[4:0] == 5'h02 || cpu_data[4:0] == 5'h03 || cpu_data[4:0] == 5'h04 || cpu_data[4:0] == 5'h0C);
+                                    end else begin
+                                        // Palette pointer
+                                        //palette_pointer <= cpu_data[5:0];
+                                        //$display("[GX4000_VIDEO] Secondary Palette Pointer Write: addr=%h data=%h (pointer=%d)", 
+                                        //        cpu_addr, cpu_data, cpu_data[5:0]);
+                                    end
+                                end else begin
+                                    // Normal MRER/RMR2 handling for other addresses
+                                    if (cpu_data[5] == 1'b0) begin
+                                        // MRER - Mode and ROM enable register
+                                        $display("[GX4000_VIDEO] Mode and ROM Enable Write: addr=%h data=%h (mode=%h rom_en=%b plus_mode=%b enhanced=%b)", 
+                                                cpu_addr, cpu_data, cpu_data[4:0], cpu_data[6], cpu_data[7], cpu_data[4:0] == 5'h01 || cpu_data[4:0] == 5'h02 || cpu_data[4:0] == 5'h03 || cpu_data[4:0] == 5'h04 || cpu_data[4:0] == 5'h0C);
+                                    end else begin
+                                        // RMR2 - Secondary ROM mapping register
+                                        $display("[GX4000_VIDEO] Secondary ROM Mapping Write: addr=%h data=%h (bank=%h)", 
+                                                cpu_addr, cpu_data, cpu_data[4:0]);
+                                    end
+                                end
+                            end
+                            2'b11: begin  // Memory mapping register (RAM)
+                                // RAM mapping configuration
+                                $display("[GX4000_VIDEO] Memory Mapping Write: addr=%h data=%h (page=%h map=%h)", 
+                                        cpu_addr, cpu_data, cpu_data[5:3], cpu_data[2:0]);
+                            end
+                        endcase
+                    end
+                endcase
+                
+                // Primary palette port (6400-643F)
+                if (cpu_addr[15:6] == 10'h190) begin  // 6400-643F
+                    // Each palette entry is 2 bytes:
+                    // First byte: GREEN (D3-D0)
+                    // Second byte: RED (D7-D4) and BLUE (D3-D0)
+                    if (cpu_addr[0] == 0) begin
+                        // First byte - GREEN
+                        primary_palette[cpu_addr[5:1]][7:4] <= cpu_data[3:0];
+                        $display("[GX4000_VIDEO] Primary Palette Green Write: addr=%h data=%h (index=%d)", 
+                                cpu_addr, cpu_data, cpu_addr[5:1]);
+                    end else begin
+                        // Second byte - RED and BLUE
+                        primary_palette[cpu_addr[5:1]][11:8] <= cpu_data[7:4];  // RED
+                        primary_palette[cpu_addr[5:1]][3:0]  <= cpu_data[3:0];  // BLUE
+                        $display("[GX4000_VIDEO] Primary Palette Red/Blue Write: addr=%h data=%h (index=%d, red=%h blue=%h)", 
+                                cpu_addr, cpu_data, cpu_addr[5:1], cpu_data[7:4], cpu_data[3:0]);
+                    end
+                end
+            end
+            
+            /*
+            // Debug color output
+            if (!hblank && !vblank) begin
+                $display("[GX4000_VIDEO] Color Output: index=%d color=%h r=%h g=%h b=%h", 
+                        color_index, color, r_reg, g_reg, b_reg);
+            end
+            */
+            // Video processing with proper grey scale weighting
+            if (!hblank && !vblank) begin
+                //$display("PIXEL: idx=%d color=%h (R=%h G=%h B=%h) enhanced=%b time=%t", color_index, color, color[11:8], color[7:4], color[3:0], mrer_enhanced, $time);
+                // Select palette based on video mode and configuration
+
+                                    
+                case (video_mode)
+                    8'h00: begin  // Standard CPC mode
+                        selected_palette = primary_palette[color_index];
+                    end
+                    8'h01: begin  // Enhanced video mode
+                        selected_palette = mrer_enhanced ? secondary_palette[color_index] : primary_palette[color_index];
+                    end
+                    8'h02: begin  // Sprite mode
+                        if (config_palette[0]) begin  // 32-color mode
+                            selected_palette = secondary_palette[sprite_pixel[4:0]];
+                        end else begin  // 16-color mode
+                            selected_palette = secondary_palette[{2'b00, sprite_pixel[3:0]}];
+                        end
+                    end
+                    8'h03: begin  // Combined enhanced video and sprite mode
+                        if (sprite_active) begin
+                            if (config_palette[0]) begin  // 32-color mode
+                                selected_palette = secondary_palette[sprite_pixel[4:0]];
+                            end else begin  // 16-color mode
+                                selected_palette = secondary_palette[{2'b00, sprite_pixel[3:0]}];
+                            end
+                        end else begin
+                            selected_palette = mrer_enhanced ? secondary_palette[color_index] : primary_palette[color_index];
+                        end
+                    end
+                    8'h04: begin  // Audio enhanced mode
+                        selected_palette = mrer_enhanced ? secondary_palette[color_index] : primary_palette[color_index];
+                    end
+                    8'h05: begin  // Plus mode with enhanced features
+                        if (sprite_active) begin
+                            selected_palette = secondary_palette[sprite_pixel[4:0]];  // Always 32-color in Plus mode
+                        end else begin
+                            selected_palette = secondary_palette[color_index];  // Always use secondary palette in Plus mode
+                        end
+                    end
+                    default: begin
+                        selected_palette = primary_palette[color_index];  // Default to primary palette
+                    end
+                endcase
+
+                // Use grey scale for monochrome output
+                if (config_palette[1]) begin  // Monochrome mode
+                    reg [7:0] grey = (selected_palette[11:8] * 9 + selected_palette[7:4] * 3 + selected_palette[3:0]) / 13;
+                    r_reg <= 2'(grey[7:6]);
+                    g_reg <= 2'(grey[7:6]);
+                    b_reg <= 2'(grey[7:6]);
                 end else begin
-                    // Background color with video mode effects
-                    case (video_mode)
-                        8'h00: begin // Normal mode
-                            r_reg <= 2'(palette[{r_in, 3'b000}][23:16]);
-                            g_reg <= 2'(palette[{g_in, 3'b000}][15:8]);
-                            b_reg <= 2'(palette[{b_in, 3'b000}][7:0]);
-                        end
-                        8'h01: begin // Double width
-                            r_reg <= 2'(palette[{r_in, 3'b000}][23:16]);
-                            g_reg <= 2'(palette[{g_in, 3'b000}][15:8]);
-                            b_reg <= 2'(palette[{b_in, 3'b000}][7:0]);
-                            if (screen_x[0]) begin
-                                r_reg <= 2'(r_reg);
-                                g_reg <= 2'(g_reg);
-                                b_reg <= 2'(b_reg);
-                            end
-                        end
-                        8'h02: begin // Double height
-                            r_reg <= 2'(palette[{r_in, 3'b000}][23:16]);
-                            g_reg <= 2'(palette[{g_in, 3'b000}][15:8]);
-                            b_reg <= 2'(palette[{b_in, 3'b000}][7:0]);
-                            if (screen_y[0]) begin
-                                r_reg <= 2'(8'h00);
-                                g_reg <= 2'(8'h00);
-                                b_reg <= 2'(8'h00);
-                            end
-                        end
-                        8'h03: begin // Interlaced
-                            r_reg <= 2'(palette[{r_in, 3'b000}][23:16]);
-                            g_reg <= 2'(palette[{g_in, 3'b000}][15:8]);
-                            b_reg <= 2'(palette[{b_in, 3'b000}][7:0]);
-                            if (screen_y[0]) begin
-                                r_reg <= 2'(8'h00);
-                                g_reg <= 2'(8'h00);
-                                b_reg <= 2'(8'h00);
-                            end
-                        end
-                        8'h04: begin // Scanline
-                            r_reg <= 2'(palette[{r_in, 3'b000}][23:16]);
-                            g_reg <= 2'(palette[{g_in, 3'b000}][15:8]);
-                            b_reg <= 2'(palette[{b_in, 3'b000}][7:0]);
-                            if (screen_y[0]) begin
-                                r_reg <= 2'(r_reg >> 1);
-                                g_reg <= 2'(g_reg >> 1);
-                                b_reg <= 2'(b_reg >> 1);
-                            end
-                        end
-                        8'h05: begin // Shadow
-                            r_reg <= 2'(palette[{r_in, 3'b000}][23:16]);
-                            g_reg <= 2'(palette[{g_in, 3'b000}][15:8]);
-                            b_reg <= 2'(palette[{b_in, 3'b000}][7:0]);
-                            r_reg <= 2'(r_reg >> 1);
-                            g_reg <= 2'(g_reg >> 1);
-                            b_reg <= 2'(b_reg >> 1);
-                        end
-                        8'h06: begin // Ghost
-                            r_reg <= 2'(palette[{r_in, 3'b000}][23:16]);
-                            g_reg <= 2'(palette[{g_in, 3'b000}][15:8]);
-                            b_reg <= 2'(palette[{b_in, 3'b000}][7:0]);
-                            r_reg <= 2'((r_reg + 8'h80) >> 1);
-                            g_reg <= 2'((g_reg + 8'h80) >> 1);
-                            b_reg <= 2'((b_reg + 8'h80) >> 1);
-                        end
-                        8'h07: begin // Blur
-                            r_reg <= 2'((r_reg + r_reg_prev) >> 1);
-                            g_reg <= 2'((g_reg + g_reg_prev) >> 1);
-                            b_reg <= 2'((b_reg + b_reg_prev) >> 1);
-                        end
-                        8'h08: begin // Pixelate
-                            r_reg <= 2'(r_reg_prev);
-                            g_reg <= 2'(g_reg_prev);
-                            b_reg <= 2'(b_reg_prev);
-                            if (screen_x[1:0] != 2'b00 || screen_y[1:0] != 2'b00) begin
-                                r_reg <= 2'(r_reg_prev);
-                                g_reg <= 2'(g_reg_prev);
-                                b_reg <= 2'(b_reg_prev);
-                            end
-                        end
-                        8'h09: begin // Wave
-                            r_reg <= 2'(r_reg_prev);
-                            g_reg <= 2'(g_reg_prev);
-                            b_reg <= 2'(b_reg_prev);
-                            wave_offset = 8'((screen_y * 8'h20) >> 8);
-                            wave_x = 8'(screen_x + wave_offset);
-                            if (wave_x[7:0] != screen_x[7:0]) begin
-                                r_reg <= 2'(r_reg_prev);
-                                g_reg <= 2'(g_reg_prev);
-                                b_reg <= 2'(b_reg_prev);
-                            end
-                        end
-                        8'h0A: begin // Zoom
-                            r_reg <= 2'(r_reg_prev);
-                            g_reg <= 2'(g_reg_prev);
-                            b_reg <= 2'(b_reg_prev);
-                            zoom_x = 8'((screen_x - 8'h40) * 8'h80 >> 7);
-                            zoom_y = 8'((screen_y - 8'h40) * 8'h80 >> 7);
-                            if (zoom_x[7:0] != screen_x[7:0] || zoom_y[7:0] != screen_y[7:0]) begin
-                                r_reg <= 2'(r_reg_prev);
-                                g_reg <= 2'(g_reg_prev);
-                                b_reg <= 2'(b_reg_prev);
-                            end
-                        end
-                        8'h0B: begin // Color cycle
-                            cycle_offset = 8'((frame_counter * 8'h20) >> 8);
-                            r_reg <= 2'(palette[{(sprite_pixel[7:5] + cycle_offset[7:5]) & 3'h7, 2'b00}][23:16]);
-                            g_reg <= 2'(palette[{(sprite_pixel[4:2] + cycle_offset[4:2]) & 3'h7, 2'b00}][15:8]);
-                            b_reg <= 2'(palette[{(sprite_pixel[1:0] + cycle_offset[1:0]) & 2'h3, 3'b000}][7:0]);
-                        end
-                        8'h0C: begin // RGB shift
-                            r_reg <= 2'(r_reg << 1);
-                            g_reg <= 2'(g_reg >> 1);
-                            b_reg <= 2'(b_reg << 1);
-                        end
-                        8'h0D: begin // CRT scanlines
-                            r_reg <= 2'(palette[{sprite_pixel[7:5], 2'b00}][23:16]);
-                            g_reg <= 2'(palette[{sprite_pixel[4:2], 2'b00}][15:8]);
-                            b_reg <= 2'(palette[{sprite_pixel[1:0], 3'b000}][7:0]);
-                            if (screen_y[0]) begin
-                                r_reg <= 2'(r_reg >> 2);
-                                g_reg <= 2'(g_reg >> 2);
-                                b_reg <= 2'(b_reg >> 2);
-                            end
-                        end
-                        8'h0E: begin // CRT phosphor
-                            r_reg <= 2'((r_reg + (r_reg_prev >> 1)) >> 1);
-                            g_reg <= 2'((g_reg + (g_reg_prev >> 1)) >> 1);
-                            b_reg <= 2'((b_reg + (b_reg_prev >> 1)) >> 1);
-                        end
-                        8'h0F: begin // CRT bloom
-                            r_reg <= 2'((r_reg + (r_reg_prev >> 2)) >> 1);
-                            g_reg <= 2'((g_reg + (g_reg_prev >> 2)) >> 1);
-                            b_reg <= 2'((b_reg + (b_reg_prev >> 2)) >> 1);
-                        end
-                    endcase
+                    // Normal color output - use full 4-bit color components
+                    r_reg <= 2'(selected_palette[11:8] >> 2);  // Red (4-bit to 2-bit)
+                    g_reg <= 2'(selected_palette[7:4] >> 2);   // Green (4-bit to 2-bit)
+                    b_reg <= 2'(selected_palette[3:0] >> 2);   // Blue (4-bit to 2-bit)
                 end
             end
             
@@ -346,23 +460,37 @@ module GX4000_video
                 // Apply palette configuration
                 if (config_palette[0]) begin // Enable 32-color mode
                     // Use full 32-color palette
-                    r_reg <= 2'(palette[{sprite_pixel[7:5], 2'b00}][23:16]);
-                    g_reg <= 2'(palette[{sprite_pixel[4:2], 2'b00}][15:8]);
-                    b_reg <= 2'(palette[{sprite_pixel[1:0], 3'b000}][7:0]);
+                    r_reg <= 2'(secondary_palette[sprite_pixel[4:0]][11:8] >> 2);
+                    g_reg <= 2'(secondary_palette[sprite_pixel[4:0]][7:4] >> 2);
+                    b_reg <= 2'(secondary_palette[sprite_pixel[4:0]][3:0] >> 2);
                 end else begin
-                    // Use 16-color mode
-                    r_reg <= 2'(palette[{sprite_pixel[7:5], 2'b00}][23:16] & 2'h3);
-                    g_reg <= 2'(palette[{sprite_pixel[4:2], 2'b00}][15:8] & 2'h3);
-                    b_reg <= 2'(palette[{sprite_pixel[1:0], 3'b000}][7:0] & 2'h3);
+                    // Use 16-color mode - only use lower 4 bits of sprite_pixel
+                    r_reg <= 2'(secondary_palette[{2'b00, sprite_pixel[3:0]}][11:8] >> 2);
+                    g_reg <= 2'(secondary_palette[{2'b00, sprite_pixel[3:0]}][7:4] >> 2);
+                    b_reg <= 2'(secondary_palette[{2'b00, sprite_pixel[3:0]}][3:0] >> 2);
                 end
                 
-                // Apply video configuration
-                if (config_video[0]) begin // Enable video effects
-                    // Use video mode effects
-                end else begin
-                    // Use normal video mode
-                    video_mode <= 8'h00;
-                end
+                // Apply video configuration based on mode bits
+                case (config_mode[3:1])
+                    3'b000: begin // Standard video mode
+                        video_mode <= 8'h00;
+                    end
+                    3'b001: begin // Enhanced video mode
+                        video_mode <= 8'h01;
+                    end
+                    3'b010: begin // Sprite mode
+                        video_mode <= 8'h02;
+                    end
+                    3'b011: begin // Combined enhanced video and sprite mode
+                        video_mode <= 8'h03;
+                    end
+                    3'b100: begin // Audio enhanced mode
+                        video_mode <= 8'h04;
+                    end
+                    default: begin // Reserved modes
+                        video_mode <= 8'h00;
+                    end
+                endcase
                 
                 // Apply audio configuration
                 if (config_audio[0]) begin // Enable enhanced audio
@@ -376,25 +504,7 @@ module GX4000_video
                 
                 // Apply preset configuration
                 if (config_preset[7]) begin // Load preset
-                    case (config_preset[2:0])
-                        3'h0: begin
-                            config_mode <= config_load[0];
-                            config_palette <= config_load[1];
-                            config_sprite <= config_load[2];
-                            config_video <= config_load[3];
-                            config_audio <= config_load[4];
-                            config_io <= config_load[5];
-                        end
-                        3'h1: begin
-                            config_mode <= config_load[1];
-                            config_palette <= config_load[2];
-                            config_sprite <= config_load[3];
-                            config_video <= config_load[4];
-                            config_audio <= config_load[5];
-                            config_io <= config_load[6];
-                        end
-                        // ... more preset cases ...
-                    endcase
+                    load_preset(config_preset[2:0]);
                 end
             end else begin
                 // Disable enhanced features
@@ -408,6 +518,9 @@ module GX4000_video
             if (vblank) begin
                 frame_counter <= 8'(frame_counter + 1);
             end
+            
+            // Log mode changes
+            //$display("MRER: enhanced=%b mode=%h at time %t", mrer_enhanced, mrer_mode, $time);
         end
     end
     
@@ -430,34 +543,55 @@ module GX4000_video
     end
     
     // Final video output signals
-    reg [1:0] final_r, final_g, final_b;
+    reg [3:0] final_r;
+    reg [3:0] final_g;
+    reg [3:0] final_b;
     
     always @(posedge clk_sys) begin
         if (reset) begin
-            final_r <= 2'b00;
-            final_g <= 2'b00;
-            final_b <= 2'b00;
+            final_r <= 4'b0000;
+            final_g <= 4'b0000;
+            final_b <= 4'b0000;
         end
         else begin
-            if (plus_mode) begin
-                // In Plus mode with sprites active
-                if (sprite_active_sync) begin
-                    // If sprite is active, use processed video with sprites
-                    final_r <= r_reg;
-                    final_g <= g_reg;
-                    final_b <= b_reg;
-                end else begin
-                    // No sprite active, just use the standard video input
-                    final_r <= r_in;
-                    final_g <= g_in;
-                    final_b <= b_in;
-                end
+            reg [11:0] selected_color;
+            reg [4:0] effective_index;
+            
+            // Determine effective color index
+            effective_index = sprite_active ? sprite_pixel[4:0] : color_index;
+            
+            // Select palette based on mode
+            if (is_plus_mode) begin
+                // Plus mode always uses secondary palette
+                selected_color = secondary_palette[effective_index];
+            end else if (is_enhanced_mode) begin
+                // Enhanced mode uses secondary palette for sprites, primary for background
+                selected_color = sprite_active ? secondary_palette[effective_index] : primary_palette[effective_index & 15];
             end else begin
-                // Not in Plus mode, just pass through the original signals
-                final_r <= r_in;
-                final_g <= g_in;
-                final_b <= b_in;
+                // Standard mode always uses primary palette
+                selected_color = primary_palette[effective_index & 15];
             end
+            
+            // Apply monochrome if enabled
+            if (config_palette[1]) begin  // Monochrome mode
+                reg [7:0] grey = (selected_color[11:8] * 9 + selected_color[7:4] * 3 + selected_color[3:0]) / 13;
+                final_r <= grey[7:4];
+                final_g <= grey[7:4];
+                final_b <= grey[7:4];
+            end else begin
+                // Normal color output
+                final_r <= selected_color[11:8];  // Red (4 bits)
+                final_g <= selected_color[7:4];   // Green (4 bits)
+                final_b <= selected_color[3:0];   // Blue (4 bits)
+            end
+            /*
+            // Debug output
+            if (!hblank && !vblank) begin
+                $display("[GX4000_VIDEO] Color Output: mode=%h enhanced=%b plus=%b sprite=%b idx=%d color=%h (R=%h G=%h B=%h)", 
+                        video_mode, is_enhanced_mode, is_plus_mode, sprite_active, effective_index, 
+                        selected_color, selected_color[11:8], selected_color[7:4], selected_color[3:0]);
+            end
+            */
         end
     end
     
@@ -465,5 +599,33 @@ module GX4000_video
     assign r_out = final_r;
     assign g_out = final_g;
     assign b_out = final_b;
+
+    // Save current configuration to a preset
+    task save_preset;
+        input [2:0] preset_num;
+        begin
+            config_load[preset_num][0] <= config_mode;
+            config_load[preset_num][1] <= config_palette;
+            config_load[preset_num][2] <= config_sprite;
+            config_load[preset_num][3] <= config_video;
+            config_load[preset_num][4] <= config_audio;
+            config_load[preset_num][5] <= config_io;
+            $display("[GX4000_VIDEO] Saving current config to preset %d", preset_num);
+        end
+    endtask
+    
+    // Load configuration from a preset
+    task load_preset;
+        input [2:0] preset_num;
+        begin
+            config_mode <= config_load[preset_num][0];
+            config_palette <= config_load[preset_num][1];
+            config_sprite <= config_load[preset_num][2];
+            config_video <= config_load[preset_num][3];
+            config_audio <= config_load[preset_num][4];
+            config_io <= config_load[preset_num][5];
+            $display("[GX4000_VIDEO] Loading config from preset %d", preset_num);
+        end
+    endtask
 
 endmodule 

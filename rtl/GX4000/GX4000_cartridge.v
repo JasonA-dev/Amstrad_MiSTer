@@ -43,7 +43,7 @@ localparam MAX_BLOCK_SIZE = 16384; // Maximum size of a cartridge block
 localparam RIFF_SIG = 32'h46464952;  // "RIFF" in little-endian
 localparam AMS_SIG = 32'h414d5321;   // "Ams!" in little-endian
 localparam FMT_SIG = 32'h666d7420;   // "fmt " in little-endian
-localparam CB_PREFIX = 24'h636230;   // "cb0" in little-endian
+localparam CB_PREFIX = 24'h6362;   // "cb" in little-endian
 
 // State machine states
 localparam 
@@ -203,7 +203,7 @@ always @(posedge clk_sys) begin
                 
                 if (byte_count == 3) begin
                     reg [31:0] id = {chunk_id[23:0], ioctl_dout};
-                    reg [23:0] prefix = id[31:8];
+                    reg [15:0] prefix = id[31:16];  // Get 16-bit prefix
                     reg [7:0]  block_num = id[7:0];
                     
                     if (id == FMT_SIG) begin
@@ -213,27 +213,39 @@ always @(posedge clk_sys) begin
                         chunk_size <= 0;
                         bytes_read <= 0;
                     end
-                    else if (prefix == CB_PREFIX && (block_num >= "0" && block_num <= "9")) begin
-                        // Handle cartridge blocks 0-9
-                        current_block <= block_num - "0";
-                        block_base <= (block_num - "0") * BANK_SIZE;  // Start at 0
-                        $display("DEBUG: Found cartridge block %d, base addr=%h", 
-                                block_num - "0", (block_num - "0") * BANK_SIZE);
-                        state <= S_DATA;
-                        byte_count <= 0;
-                        chunk_size <= 0;
-                        bytes_read <= 0;
-                    end
-                    else if (prefix == CB_PREFIX && (block_num >= "A" && block_num <= "V")) begin
-                        // Handle cartridge blocks 10-31 (A-V)
-                        current_block <= 10 + (block_num - "A");
-                        block_base <= (10 + (block_num - "A")) * BANK_SIZE;  // Start at 0
-                        $display("DEBUG: Found cartridge block %d, base addr=%h", 
-                                10 + (block_num - "A"), (10 + (block_num - "A")) * BANK_SIZE);
-                        state <= S_DATA;
-                        byte_count <= 0;
-                        chunk_size <= 0;
-                        bytes_read <= 0;
+                    else if (prefix == CB_PREFIX) begin  // Check for "cb" prefix (16-bit)
+                        // Handle all cartridge blocks (0-31)
+                        if (block_num >= 8'h30 && block_num <= 8'h39) begin
+                            // Calculate block number based on prefix and digit
+                            reg [4:0] block_num_dec;
+                            reg [7:0] prefix_num = id[15:8] - 8'h30;  // Get prefix digit from id[15:8]
+                            
+                            // Calculate block number: (prefix_num * 10) + digit
+                            block_num_dec = (prefix_num * 10) + (block_num - 8'h30);
+                            
+                            // Only process if block number is valid (0-31)
+                            if (block_num_dec <= 31) begin
+                                current_block <= block_num_dec;
+                                block_base <= block_num_dec * BANK_SIZE;
+                                $display("DEBUG: Found cartridge block %d, base addr=%h", 
+                                        block_num_dec, block_num_dec * BANK_SIZE);
+                                state <= S_DATA;
+                                byte_count <= 0;
+                                chunk_size <= 0;
+                                bytes_read <= 0;
+                            end else begin
+                                $display("DEBUG: Block number %d exceeds maximum (31)", block_num_dec);
+                                state <= S_CHUNK;
+                                byte_count <= 0;
+                                chunk_id <= 0;
+                            end
+                        end
+                        else begin
+                            $display("DEBUG: Invalid block number %h in cartridge chunk", block_num);
+                            state <= S_CHUNK;
+                            byte_count <= 0;
+                            chunk_id <= 0;
+                        end
                     end
                     else begin
                         // Unknown chunk - skip to next chunk header
@@ -266,7 +278,7 @@ always @(posedge clk_sys) begin
                             chunk_id <= 0;
                         end else begin
                             // For cartridge blocks, limit size to 16KB
-                            if (chunk_id[31:8] == CB_PREFIX) begin
+                            if (chunk_id[31:16] == CB_PREFIX) begin
                                 if (size > MAX_BLOCK_SIZE) begin
                                     $display("DEBUG: Warning - Block %d size %h exceeds 16KB, limiting to %h bytes",
                                             current_block, size, MAX_BLOCK_SIZE);
@@ -335,7 +347,7 @@ always @(posedge clk_sys) begin
                         
                         default: begin
                             // Check if this is a cartridge block (cb0X)
-                            if (chunk_id[31:8] == CB_PREFIX) begin
+                            if (chunk_id[31:16] == CB_PREFIX) begin
                                 // Calculate address
                                 reg [31:0] block_addr = block_base + block_offset;
                                 
@@ -431,7 +443,7 @@ assign boot_addr = boot_vector;
 assign cart_addr = {2'b00, addr};  // Extend to 25 bits
 assign cart_data = data;
 assign cart_wr = ioctl_download && ioctl_wr && is_cpr && 
-                 (state == S_DATA) && (chunk_id[31:8] == CB_PREFIX) &&
+                 (state == S_DATA) && (chunk_id[31:16] == CB_PREFIX) &&
                  (bytes_read > 0) && (block_offset < MAX_BLOCK_SIZE);
 
 endmodule 

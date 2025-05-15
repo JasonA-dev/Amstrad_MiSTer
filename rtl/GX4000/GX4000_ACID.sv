@@ -82,30 +82,21 @@ module GX4000_ACID
             last_cpu_addr <= cpu_addr;
 
             // Handle reads from BC00 - detect active read
-            if (cpu_rd && cpu_addr == 16'hBC00 && state != PERM_UNLOCKED) begin
-                //$display("[ACID] Read from BC00: Data=%h, Current_State=%s, Step=%d, Next_Expected=%h", 
-                        //next_byte,
-                        //state == LOCKED ? "LOCKED" : state == UNLOCKING ? "UNLOCKING" : "UNLOCKED",
-                        //seq_index,
-                        //UNLOCK_SEQ[seq_index]);
-
+            if (cpu_rd && !last_cpu_rd && cpu_addr == 16'hBC00) begin
                 case (state)
                     LOCKED: begin
-                        if (seq_index == 0) begin
-                            // First byte must be non-zero
-                            if (next_byte != 8'h00) begin
-                                seq_index <= seq_index + 1'd1;
-                                status_reg <= UNLOCK_SEQ[seq_index + 1'd1];
-                                next_byte <= UNLOCK_SEQ[seq_index + 1'd1];
-                                received_seq[0] <= next_byte;
-                                //$display("[ACID] Step %d: Valid RQ00 read (%h), advancing to next byte %h", 
-                                        //seq_index, next_byte, UNLOCK_SEQ[seq_index + 1'd1]);
-                            end else begin
-                                //$display("[ACID] Step %d: Invalid RQ00 read (%h) - must be non-zero", 
-                                        //seq_index, next_byte);
-                            end
-                        end
-                        else if (next_byte == UNLOCK_SEQ[seq_index]) begin
+                        // First read starts unlock sequence
+                        state <= UNLOCKING;
+                        seq_index <= 5'd0;
+                        status_reg <= UNLOCK_SEQ[0];
+                        next_byte <= UNLOCK_SEQ[0];
+                        attempt_count <= attempt_count + 1'd1;
+                        $display("[ACID] Starting unlock sequence - Attempt %d", attempt_count + 1);
+                    end
+
+                    UNLOCKING: begin
+                        // Check if correct byte was read
+                        if (next_byte == UNLOCK_SEQ[seq_index]) begin
                             received_seq[seq_index] <= next_byte;
                             if (seq_index == 15) begin
                                 // STATE byte received - unlock ASIC
@@ -124,38 +115,16 @@ module GX4000_ACID
                                 seq_index <= seq_index + 1'd1;
                                 status_reg <= UNLOCK_SEQ[seq_index + 1'd1];
                                 next_byte <= UNLOCK_SEQ[seq_index + 1'd1];
-                                //$display("[ACID] Step %d: Correct byte read (%h), advancing to next byte %h", 
-                                        //seq_index, next_byte, UNLOCK_SEQ[seq_index + 1'd1]);
                             end
                         end
                         else begin
-                            // Wrong byte - reset sequence
+                            // Wrong byte read - reset sequence
+                            state <= LOCKED;
                             seq_index <= '0;
                             status_reg <= UNLOCK_SEQ[0];
                             next_byte <= UNLOCK_SEQ[0];
-                            attempt_count <= attempt_count + 1'd1;
-                            //$display("[ACID] Step %d: Wrong byte read (%h), expected %h. Reset sequence. Attempt: %d", 
-                                    //seq_index, next_byte, UNLOCK_SEQ[seq_index], attempt_count + 1'd1);
-                            //$display("[ACID] Partial sequence received before error:");
-                            for (int i = 0; i < seq_index; i++) begin
-                                //$display("[ACID] Step %d: Received %h, Expected %h", 
-                                        //i, received_seq[i], UNLOCK_SEQ[i]);
-                            end
-                        end
-                    end
-
-                    UNLOCKED: begin
-                        // After ACQ byte, move to PERM_UNLOCKED instead of LOCKED
-                        received_seq[16] <= next_byte;
-                        seq_index <= '0;
-                        status_reg <= UNLOCK_SEQ[0];
-                        next_byte <= UNLOCK_SEQ[0];
-                        state <= PERM_UNLOCKED;  // Change to PERM_UNLOCKED
-                        $display("[ACID] ACQ byte read (%h), moving to PERM_UNLOCKED state", next_byte);
-                        $display("[ACID] Complete sequence received:");
-                        for (int i = 0; i < 17; i++) begin
-                            $display("[ACID] Step %d: Received %h, Expected %h", 
-                                    i, received_seq[i], UNLOCK_SEQ[i]);
+                            $display("[ACID] Wrong byte read: %h, expected %h - Resetting sequence", 
+                                    next_byte, UNLOCK_SEQ[seq_index]);
                         end
                     end
 

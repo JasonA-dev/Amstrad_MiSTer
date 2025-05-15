@@ -18,9 +18,9 @@ module PlusMode
     input   [1:0] b_in,
     input         hblank,
     input         vblank,
-    output  [1:0] r_out,
-    output  [1:0] g_out,
-    output  [1:0] b_out,
+    output  [3:0] r_out,
+    output  [3:0] g_out,
+    output  [3:0] b_out,
     
     // Audio interface
     input   [7:0] cpc_audio_l,
@@ -109,7 +109,7 @@ module PlusMode
     (
         .clk_sys(clk_sys),
         .reset(reset),
-        .plus_mode(plus_mode & use_asic),
+        .plus_mode(plus_mode),
         
         // CPU interface
         .cpu_addr(cpu_addr),
