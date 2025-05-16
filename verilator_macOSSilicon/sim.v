@@ -510,6 +510,36 @@ wire [1:0] mb_g = g;
 wire [1:0] mb_b = b;
 
 // Video output conversion - handle both 12-bit color in Plus mode and 2-bit color in standard mode
+reg [5:0] vga_r_reg, vga_g_reg, vga_b_reg;
+reg vga_hs_reg, vga_vs_reg, vga_hb_reg, vga_vb_reg;
+
+// Add debug counters
+reg [15:0] vga_pixel_counter = 0;
+reg [15:0] vga_frame_counter = 0;
+
+always @(posedge clk_48) begin
+    if (reset) begin
+        vga_pixel_counter <= 0;
+        vga_frame_counter <= 0;
+    end else begin
+        if (!VGA_HB && !VGA_VB) begin
+            vga_pixel_counter <= vga_pixel_counter + 1;
+            
+            // Log every 1000th pixel for debugging
+            if (vga_pixel_counter % 1000 == 0) begin
+                $display("[VGA_OUT] Pixel %d: R=%h G=%h B=%h", 
+                        vga_pixel_counter, VGA_R, VGA_G, VGA_B);
+            end
+        end
+        
+        if (VGA_VB) begin
+            vga_frame_counter <= vga_frame_counter + 1;
+            $display("[VGA_OUT] Frame %d complete: %d pixels", vga_frame_counter, vga_pixel_counter);
+            vga_pixel_counter <= 0;
+        end
+    end
+end
+
 assign VGA_R = plus_mode ? plus_r[3:0] : {mb_r, mb_r, mb_r};
 assign VGA_G = plus_mode ? plus_g[3:0] : {mb_g, mb_g, mb_g};
 assign VGA_B = plus_mode ? plus_b[3:0] : {mb_b, mb_b, mb_b};

@@ -52,6 +52,7 @@ module GX4000_ACID
     logic [31:0] attempt_count; // Debug counter for unlock attempts
     logic [7:0]  received_seq [0:16]; // Store received sequence for debugging
     logic [7:0]  next_byte;    // Next byte to be read by CPU
+    reg [7:0] unlock_addr = 8'h00;
 
     // Debug signals
     logic last_cpu_wr;
@@ -72,7 +73,7 @@ module GX4000_ACID
             last_cpu_rd <= 1'b0;
             last_cpu_data_in <= 8'h00;
             last_cpu_addr <= 16'h0000;
-            $display("[ACID] Reset - State: LOCKED, Next byte: %h", UNLOCK_SEQ[0]);
+            //$display("[ACID] Reset - State: LOCKED, Next byte: %h", UNLOCK_SEQ[0]);
         end
         else if (plus_mode) begin
             // Store last CPU signals for edge detection
@@ -134,64 +135,56 @@ module GX4000_ACID
             
             // Debug write operations - detect rising edge of write
             if (cpu_wr && !last_cpu_wr && cpu_addr[15:8] == 8'hBC) begin
+                // Accept both per-address and fixed-address unlock sequences
+                // If this is the first write, record the address if not already set
+                if (state == LOCKED && seq_index == 0) begin
+                    unlock_addr <= cpu_addr[7:0];
+                end
                 // Check if this is part of the unlock sequence
-                if (cpu_addr[7:0] == cpu_data_in) begin
-                    $display("[ACID] Unlock write: BC%02X = %h (matches address)", 
+                if ((cpu_addr[7:0] == cpu_data_in) || (cpu_addr[7:0] == unlock_addr && cpu_data_in == UNLOCK_SEQ[seq_index]) || (cpu_addr[7:0] == 8'h00 && cpu_data_in == UNLOCK_SEQ[seq_index])) begin
+                    $display("[ACID] Unlock write: BC%02X = %h (matches address or fixed)", 
                             cpu_addr[7:0], cpu_data_in);
-                            
                     // Process as part of unlock sequence
                     case (state)
                         LOCKED: begin
                             if (cpu_data_in == UNLOCK_SEQ[0]) begin
                                 state <= UNLOCKING;
-                                seq_index <= 5'd1;
-                                status_reg <= UNLOCK_SEQ[1];
-                                next_byte <= UNLOCK_SEQ[1];
-                                attempt_count <= attempt_count + 1'd1;
-                                $display("[ACID] Starting unlock sequence - Attempt %d", attempt_count + 1);
+                                seq_index <= 1;
+                                received_seq[0] <= cpu_data_in;
+                                $display("[ACID] Unlock started (fixed or per-address)");
                             end
                         end
-                        
                         UNLOCKING: begin
                             if (cpu_data_in == UNLOCK_SEQ[seq_index]) begin
                                 received_seq[seq_index] <= cpu_data_in;
-                                if (seq_index == 15) begin
-                                    // STATE byte received - unlock ASIC
+                                if ((seq_index == 14 || seq_index == 15)) begin
+                                    // STATE byte received - unlock ASIC (support both 15 and 16 byte sequences)
                                     state <= PERM_UNLOCKED;
-                                    seq_index <= seq_index + 1'd1;
-                                    status_reg <= UNLOCK_SEQ[16];
-                                    next_byte <= UNLOCK_SEQ[16];
-                                    $display("[ACID] UNLOCKED! Complete sequence received");
+                                    status_reg <= 8'h00; // Signal unlocked to CPU
+                                    next_byte <= 8'h00; // Signal unlocked to CPU
+                                    $display("[ACID] UNLOCKED! Complete sequence received (at step %0d)", seq_index);
                                 end else begin
                                     seq_index <= seq_index + 1'd1;
-                                    status_reg <= UNLOCK_SEQ[seq_index + 1'd1];
-                                    next_byte <= UNLOCK_SEQ[seq_index + 1'd1];
-                                    $display("[ACID] Unlock sequence progress: %d/16", seq_index + 1);
                                 end
                             end else begin
-                                // Wrong byte - reset sequence
+                                // Wrong value, reset
+                                $display("[ACID] Unlock failed at step %0d: got %h, expected %h", seq_index, cpu_data_in, UNLOCK_SEQ[seq_index]);
                                 state <= LOCKED;
-                                seq_index <= '0;
-                                status_reg <= UNLOCK_SEQ[0];
-                                next_byte <= UNLOCK_SEQ[0];
-                                $display("[ACID] Wrong byte %h, expected %h - Resetting sequence", 
-                                        cpu_data_in, UNLOCK_SEQ[seq_index]);
+                                seq_index <= 0;
                             end
                         end
-                        
-                        PERM_UNLOCKED: begin
-                            // Already unlocked, ignore writes
-                        end
-                        
-                        default: state <= LOCKED;
+                        default: ;
                     endcase
                 end else begin
                     $display("[ACID] Write to BC%02X: Data=%h, Status=%h, State=%s, Step=%d", 
                             cpu_addr[7:0],
                             cpu_data_in,
                             status_reg, 
-                            state == LOCKED ? "LOCKED" : state == UNLOCKING ? "UNLOCKING" : "UNLOCKED",
+                            state.name(),
                             seq_index);
+                    // Not part of unlock sequence, reset
+                    state <= LOCKED;
+                    seq_index <= 0;
                 end
             end
         end
@@ -205,4 +198,5 @@ module GX4000_ACID
     assign asic_status = status_reg;
 
 endmodule 
+
 
