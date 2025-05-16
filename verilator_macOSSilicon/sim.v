@@ -112,7 +112,7 @@ always @(posedge clk_48) begin
     
     // Come out of reset when CPR download starts
     if (plus_download) begin
-        $display("DEBUG: CPR Download starting, releasing reset");
+        //$display("DEBUG: CPR Download starting, releasing reset");
         RESET <= 0;
     end
     

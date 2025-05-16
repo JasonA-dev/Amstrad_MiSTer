@@ -53,6 +53,9 @@ module GX4000_video
     reg [1:0] g_reg;
     reg [1:0] b_reg;
     
+    // Sprite memory - 15 sprites, 1KB each
+    reg [7:0] sprite_data[0:15359];  // 15 sprites * 1024 bytes
+    
     // Configuration registers
     reg [7:0] config_mode;
     reg [7:0] config_palette;
@@ -170,6 +173,11 @@ module GX4000_video
             b_reg_prev <= 8'h00;
             frame_counter <= 8'h00;
             palette_pointer <= 5'h00;  // Initialize to 0
+            
+            // Initialize sprite memory
+            for (integer i = 0; i < 15360; i = i + 1) begin
+                sprite_data[i] = 8'h00;  // Changed from <= to = for non-blocking assignment
+            end
         end else begin
             // Debug output for CPU writes
             if (cpu_wr && cpu_addr[15:14] == 2'b01) begin  // Only 0x4000-0x7FFF range
@@ -178,28 +186,28 @@ module GX4000_video
                 
                 // Debug palette writes
                 if (cpu_addr[15:6] == 10'h190) begin  // 6400-643F
-                    $display("[GX4000_VIDEO] Palette Write: addr=%h data=%h index=%d", 
-                            cpu_addr, cpu_data, cpu_addr[5:1]);
+                    //$display("[GX4000_VIDEO] Palette Write: addr=%h data=%h index=%d", 
+                    //        cpu_addr, cpu_data, cpu_addr[5:1]);
                 end
                 
                 // Palette pointer write (0x7F88, 0x7F89, 0x7F8A, 0x7F8B, etc. - mask lowest bit for mirrors)
                 if ((cpu_addr & 16'hFFFE) == 16'h7F88) begin
                     palette_pointer <= cpu_data[4:0];
-                    $display("[GX4000_VIDEO] Palette Pointer Write: %d", cpu_data[4:0]);
+                    //$display("[GX4000_VIDEO] Palette Pointer Write: %d", cpu_data[4:0]);
                 end
                 // Palette RG write (0x7F89, 0x7F8B, etc. - mask lowest bit for mirrors)
                 else if ((cpu_addr & 16'hFFFE) == 16'h7F89) begin
                     palette_latch_r <= cpu_data[7:4];
                     palette_latch_g <= cpu_data[3:0];
-                    $display("[GX4000_VIDEO] Palette RG Latch: R=%h G=%h", cpu_data[7:4], cpu_data[3:0]);
+                    //$display("[GX4000_VIDEO] Palette RG Latch: R=%h G=%h", cpu_data[7:4], cpu_data[3:0]);
                 end
                 // Palette B write/commit (0x7F8B, 0x7F8D, etc. - mask lowest bit for mirrors)
                 else if ((cpu_addr & 16'hFFFE) == 16'h7F8B) begin
                     if (palette_pointer < 32) begin
                         // Restore to default nibble order: {R, G, B}
                         secondary_palette[palette_pointer] <= {palette_latch_r, palette_latch_g, cpu_data[7:4]};
-                        $display("[GX4000_VIDEO] Palette Commit (DEFAULT): idx=%d R=%h G=%h B=%h", palette_pointer, palette_latch_r, palette_latch_g, cpu_data[7:4]);
-                        $display("PALETTE WRITE: idx=%d val=%h (R=%h G=%h B=%h) at time %t", palette_pointer, {palette_latch_r, palette_latch_g, cpu_data[7:4]}, palette_latch_r, palette_latch_g, cpu_data[7:4], $time);
+                        //$display("[GX4000_VIDEO] Palette Commit (DEFAULT): idx=%d R=%h G=%h B=%h", palette_pointer, palette_latch_r, palette_latch_g, cpu_data[7:4]);
+                        //$display("PALETTE WRITE: idx=%d val=%h (R=%h G=%h B=%h) at time %t", palette_pointer, {palette_latch_r, palette_latch_g, cpu_data[7:4]}, palette_latch_r, palette_latch_g, cpu_data[7:4], $time);
                         palette_pointer <= palette_pointer + 1'b1; // Auto-increment pointer
                     end
                 end
@@ -211,8 +219,10 @@ module GX4000_video
                 case (cpu_addr[15:12])
                     4'h4: begin  // 4000h-4FFFh: Sprite image data
                         if (cpu_addr[11:8] < 4'hF) begin  // Valid sprite number (0-14)
-                        //    $display("[GX4000_VIDEO] Sprite %d Image Data Write: addr=%h data=%h", 
-                        //            cpu_addr[11:8], cpu_addr, cpu_data);
+                            // Store sprite data in sprite memory
+                            sprite_data[{cpu_addr[11:8], cpu_addr[7:0]}] <= cpu_data;
+                            $display("[GX4000_VIDEO] Sprite %d Image Data Write: addr=%h data=%h", 
+                                    cpu_addr[11:8], cpu_addr, cpu_data);
                         end
                     end
                     
@@ -301,7 +311,7 @@ module GX4000_video
                                     //        new_color[11:8], new_color[7:4], new_color[3:0], plus_mode);
                                     palette_pointer <= palette_pointer + 1'b1; // Auto-increment pointer
                                 end else begin
-                                    $display("[GX4000_VIDEO] Warning: Invalid palette pointer %d", palette_pointer);
+                                   // $display("[GX4000_VIDEO] Warning: Invalid palette pointer %d", palette_pointer);
                                 end
                             end
                             2'b10: begin  // Mode and ROM enable register (MRER) or Secondary ROM mapping register (RMR2)
@@ -338,8 +348,8 @@ module GX4000_video
                                             end
                                         endcase
                                         
-                                        $display("[GX4000_VIDEO] Mode and ROM Enable Write: addr=%h data=%h (mode=%h rom_en=%b plus_mode=%b enhanced=%b)", 
-                                                cpu_addr, cpu_data, cpu_data[4:0], cpu_data[6], cpu_data[7], cpu_data[4:0] == 5'h01 || cpu_data[4:0] == 5'h02 || cpu_data[4:0] == 5'h03 || cpu_data[4:0] == 5'h04 || cpu_data[4:0] == 5'h0C);
+                                        //$display("[GX4000_VIDEO] Mode and ROM Enable Write: addr=%h data=%h (mode=%h rom_en=%b plus_mode=%b enhanced=%b)", 
+                                        //        cpu_addr, cpu_data, cpu_data[4:0], cpu_data[6], cpu_data[7], cpu_data[4:0] == 5'h01 || cpu_data[4:0] == 5'h02 || cpu_data[4:0] == 5'h03 || cpu_data[4:0] == 5'h04 || cpu_data[4:0] == 5'h0C);
                                     end else begin
                                         // Palette pointer
                                         //palette_pointer <= cpu_data[5:0];
@@ -350,19 +360,19 @@ module GX4000_video
                                     // Normal MRER/RMR2 handling for other addresses
                                     if (cpu_data[5] == 1'b0) begin
                                         // MRER - Mode and ROM enable register
-                                        $display("[GX4000_VIDEO] Mode and ROM Enable Write: addr=%h data=%h (mode=%h rom_en=%b plus_mode=%b enhanced=%b)", 
-                                                cpu_addr, cpu_data, cpu_data[4:0], cpu_data[6], cpu_data[7], cpu_data[4:0] == 5'h01 || cpu_data[4:0] == 5'h02 || cpu_data[4:0] == 5'h03 || cpu_data[4:0] == 5'h04 || cpu_data[4:0] == 5'h0C);
+                                        //$display("[GX4000_VIDEO] Mode and ROM Enable Write: addr=%h data=%h (mode=%h rom_en=%b plus_mode=%b enhanced=%b)", 
+                                        //        cpu_addr, cpu_data, cpu_data[4:0], cpu_data[6], cpu_data[7], cpu_data[4:0] == 5'h01 || cpu_data[4:0] == 5'h02 || cpu_data[4:0] == 5'h03 || cpu_data[4:0] == 5'h04 || cpu_data[4:0] == 5'h0C);
                                     end else begin
                                         // RMR2 - Secondary ROM mapping register
-                                        $display("[GX4000_VIDEO] Secondary ROM Mapping Write: addr=%h data=%h (bank=%h)", 
-                                                cpu_addr, cpu_data, cpu_data[4:0]);
+                                        //$display("[GX4000_VIDEO] Secondary ROM Mapping Write: addr=%h data=%h (bank=%h)", 
+                                        //        cpu_addr, cpu_data, cpu_data[4:0]);
                                     end
                                 end
                             end
                             2'b11: begin  // Memory mapping register (RAM)
                                 // RAM mapping configuration
-                                $display("[GX4000_VIDEO] Memory Mapping Write: addr=%h data=%h (page=%h map=%h)", 
-                                        cpu_addr, cpu_data, cpu_data[5:3], cpu_data[2:0]);
+                                //$display("[GX4000_VIDEO] Memory Mapping Write: addr=%h data=%h (page=%h map=%h)", 
+                                //        cpu_addr, cpu_data, cpu_data[5:3], cpu_data[2:0]);
                             end
                         endcase
                     end
@@ -376,14 +386,14 @@ module GX4000_video
                     if (cpu_addr[0] == 0) begin
                         // First byte - GREEN
                         primary_palette[cpu_addr[5:1]][7:4] <= cpu_data[3:0];
-                        $display("[GX4000_VIDEO] Primary Palette Green Write: addr=%h data=%h (index=%d)", 
-                                cpu_addr, cpu_data, cpu_addr[5:1]);
+                        //$display("[GX4000_VIDEO] Primary Palette Green Write: addr=%h data=%h (index=%d)", 
+                        //        cpu_addr, cpu_data, cpu_addr[5:1]);
                     end else begin
                         // Second byte - RED and BLUE
                         primary_palette[cpu_addr[5:1]][11:8] <= cpu_data[7:4];  // RED
                         primary_palette[cpu_addr[5:1]][3:0]  <= cpu_data[3:0];  // BLUE
-                        $display("[GX4000_VIDEO] Primary Palette Red/Blue Write: addr=%h data=%h (index=%d, red=%h blue=%h)", 
-                                cpu_addr, cpu_data, cpu_addr[5:1], cpu_data[7:4], cpu_data[3:0]);
+                        //$display("[GX4000_VIDEO] Primary Palette Red/Blue Write: addr=%h data=%h (index=%d, red=%h blue=%h)", 
+                        //        cpu_addr, cpu_data, cpu_addr[5:1], cpu_data[7:4], cpu_data[3:0]);
                     end
                 end
             end

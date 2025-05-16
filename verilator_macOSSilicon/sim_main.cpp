@@ -273,16 +273,16 @@ int main(int argc, char** argv, char** env) {
 	//bus.QueueDownload("./OS6128.rom", 0, true);
 	//bus.QueueDownload("./original.rom", 0, true);
 
-	bus.QueueDownload("./diagnostics.rom", 0, true);
+	//bus.QueueDownload("./diagnostics.rom", 0, true);
 	//bus.QueueDownload("./CPC_PLUS.CPR", 5, true);
 
 	//bus.QueueDownload("./cpr/Barbarian II (1990)(Ocean).CPR", 5, true);	   		// video + text
-	//bus.QueueDownload("./cpr/Batman the Movie (1990)(Ocean).CPR", 5, true);	  	// black border
-	//bus.QueueDownload("./cpr/Batman the Movie (1990)(Ocean)[a].CPR", 5, true);  	// black border
+	//bus.QueueDownload("./cpr/Batman the Movie (1990)(Ocean).CPR", 5, true);	  	// black border, no protection detected
+	//bus.QueueDownload("./cpr/Batman the Movie (1990)(Ocean)[a].CPR", 5, true);  	// black border, no protection detected
 	//bus.QueueDownload("./cpr/Burnin' Rubber (1990)(Ocean).CPR", 5, true);	     	// no execution
 	//bus.QueueDownload("./cpr/Crazy Cars 2 (1990)(Titus).CPR", 5, true);       	// no execution
-	//bus.QueueDownload("./cpr/Crazy Cars 2 (1990)(Titus)[a].CPR", 5, true);  		// black screen
-	//bus.QueueDownload("./cpr/Dick Tracy (1990)(Titus).CPR", 5, true); 			// black screen
+	//bus.QueueDownload("./cpr/Crazy Cars 2 (1990)(Titus)[a].CPR", 5, true);  		// black screen, no protection detected,sprite data downloading
+	bus.QueueDownload("./cpr/Dick Tracy (1990)(Titus).CPR", 5, true); 			// black screen
 	//bus.QueueDownload("./cpr/Enforcer, The (1990)(Trojan).CPR", 5, true);  		// blue border, white screen
 	//bus.QueueDownload("./cpr/Fire and Forget 2 (1990)(Titus).CPR", 5, true); 		// black screen
 	//bus.QueueDownload("./cpr/Klax (1990)(Domark).CPR", 5, true);  				// black screen

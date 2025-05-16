@@ -81,8 +81,8 @@ module GX4000_ACID
             last_cpu_data_in <= cpu_data_in;
             last_cpu_addr <= cpu_addr;
 
-            // Handle reads from BC00 - detect active read
-            if (cpu_rd && !last_cpu_rd && cpu_addr == 16'hBC00) begin
+            // Handle reads from BC00-BCFF - detect active read
+            if (cpu_rd && !last_cpu_rd && cpu_addr[15:8] == 8'hBC) begin
                 case (state)
                     LOCKED: begin
                         // First read starts unlock sequence
@@ -91,7 +91,8 @@ module GX4000_ACID
                         status_reg <= UNLOCK_SEQ[0];
                         next_byte <= UNLOCK_SEQ[0];
                         attempt_count <= attempt_count + 1'd1;
-                        $display("[ACID] Starting unlock sequence - Attempt %d", attempt_count + 1);
+                        $display("[ACID] Starting unlock sequence - Attempt %d, Register BC%02X", 
+                                attempt_count + 1, cpu_addr[7:0]);
                     end
 
                     UNLOCKING: begin
@@ -104,17 +105,19 @@ module GX4000_ACID
                                 seq_index <= seq_index + 1'd1;
                                 status_reg <= UNLOCK_SEQ[16];
                                 next_byte <= UNLOCK_SEQ[16];
-                                $display("[ACID] UNLOCKED! STATE byte (0xCD) read correctly");
-                                $display("[ACID] Full sequence received:");
-                                for (int i = 0; i < 16; i++) begin
-                                    $display("[ACID] Step %d: Received %h, Expected %h", 
-                                            i, received_seq[i], UNLOCK_SEQ[i]);
-                                end
+                                $display("[ACID] UNLOCKED! STATE byte (0xCD) read correctly from BC%02X", cpu_addr[7:0]);
+                                //$display("[ACID] Full sequence received:");
+                                //for (int i = 0; i < 16; i++) begin
+                                //    $display("[ACID] Step %d: Received %h, Expected %h", 
+                                //            i, received_seq[i], UNLOCK_SEQ[i]);
+                                //end
                             end
                             else begin
                                 seq_index <= seq_index + 1'd1;
                                 status_reg <= UNLOCK_SEQ[seq_index + 1'd1];
                                 next_byte <= UNLOCK_SEQ[seq_index + 1'd1];
+                                //$display("[ACID] Correct byte %h read from BC%02X, moving to step %d", 
+                                //       next_byte, cpu_addr[7:0], seq_index + 1);
                             end
                         end
                         else begin
@@ -123,14 +126,14 @@ module GX4000_ACID
                             seq_index <= '0;
                             status_reg <= UNLOCK_SEQ[0];
                             next_byte <= UNLOCK_SEQ[0];
-                            $display("[ACID] Wrong byte read: %h, expected %h - Resetting sequence", 
-                                    next_byte, UNLOCK_SEQ[seq_index]);
+                            $display("[ACID] Wrong byte %h read from BC%02X, expected %h - Resetting sequence", 
+                                    next_byte, cpu_addr[7:0], UNLOCK_SEQ[seq_index]);
                         end
                     end
 
                     PERM_UNLOCKED: begin
                         // Stay in PERM_UNLOCKED state, no more unlock attempts needed
-                        $display("[ACID] Already permanently unlocked, ignoring unlock attempts");
+                        //$display("[ACID] Already permanently unlocked, ignoring read from BC%02X", cpu_addr[7:0]);
                     end
 
                     default: state <= LOCKED;
@@ -138,8 +141,9 @@ module GX4000_ACID
             end
             
             // Debug write operations - detect rising edge of write
-            if (cpu_wr && !last_cpu_wr && cpu_addr == 16'hBC00) begin
-                $display("[ACID] Write to BC00: Data=%h, Status=%h, State=%s, Step=%d", 
+            if (cpu_wr && !last_cpu_wr && cpu_addr[15:8] == 8'hBC) begin
+                $display("[ACID] Write to BC%02X: Data=%h, Status=%h, State=%s, Step=%d", 
+                        cpu_addr[7:0],
                         cpu_data_in,
                         status_reg, 
                         state == LOCKED ? "LOCKED" : state == UNLOCKING ? "UNLOCKING" : "UNLOCKED",

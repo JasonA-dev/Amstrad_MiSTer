@@ -90,6 +90,23 @@ reg [31:0] total_bytes;
 reg [31:0] valid_bytes;
 reg [31:0] last_addr;
 
+// Add protection challenge detection registers
+reg [7:0] protection_state;
+reg [7:0] protection_sequence[0:15];  // Store last 16 bytes of protection sequence
+reg [3:0] protection_index;
+reg protection_active;
+
+// Protection challenge patterns
+localparam [7:0] PROTECTION_PATTERN_1 = 8'h88;  // Common protection pattern
+localparam [7:0] PROTECTION_PATTERN_2 = 8'h00;  // Another common pattern
+
+// Protection state machine states
+localparam 
+    P_IDLE = 0,
+    P_DETECTING = 1,
+    P_CHALLENGE = 2,
+    P_RESPONSE = 3;
+
 // Main state machine
 always @(posedge clk_sys) begin
     if (reset) begin
@@ -104,6 +121,12 @@ always @(posedge clk_sys) begin
         block_offset <= 0;
         filling_zeros <= 0;
         plus_bios_valid <= 0;  // Initialize to invalid
+        protection_state <= P_IDLE;
+        protection_index <= 0;
+        protection_active <= 0;
+        for (integer i = 0; i < 16; i = i + 1) begin
+            protection_sequence[i] <= 0;
+        end
     end
     if (ioctl_download && ioctl_wr && is_cpr) begin
         rom_wr <= 0;  // Default state
@@ -411,6 +434,105 @@ always @(posedge clk_sys) begin
                             end
                         end
                     endcase
+                end
+            end
+        endcase
+    end
+
+    // Add protection challenge detection logic
+    if (reset) begin
+        protection_state <= P_IDLE;
+        protection_index <= 0;
+        protection_active <= 0;
+        for (integer i = 0; i < 16; i = i + 1) begin
+            protection_sequence[i] <= 0;
+        end
+    end else begin
+        // Monitor ROM reads for protection patterns
+        if (rom_rd && !protection_active) begin
+            // Store read data in sequence buffer
+            protection_sequence[protection_index] <= rom_q;
+            protection_index <= protection_index + 1;
+            
+            // Check for protection patterns
+            if (rom_q == PROTECTION_PATTERN_1 || rom_q == PROTECTION_PATTERN_2) begin
+                protection_state <= P_DETECTING;
+                $display("[ACID] Protection pattern detected: %h", rom_q);
+            end
+        end
+/*
+        // Monitor CRTC register access
+        if (cart_addr[15:8] == 8'hBC) begin
+            reg [7:0] reg_num = cart_addr[7:0];
+            case (reg_num)
+                8'h00: $display("[ACID] CRTC: R0 (Horizontal Total) = %h", cart_data);
+                8'h01: $display("[ACID] CRTC: R1 (Horizontal Displayed) = %h", cart_data);
+                8'h02: $display("[ACID] CRTC: R2 (Horizontal Sync Position) = %h", cart_data);
+                8'h03: $display("[ACID] CRTC: R3 (Sync Widths) = %h", cart_data);
+                8'h04: $display("[ACID] CRTC: R4 (Vertical Total) = %h", cart_data);
+                8'h05: $display("[ACID] CRTC: R5 (Vertical Total Adjust) = %h", cart_data);
+                8'h06: $display("[ACID] CRTC: R6 (Vertical Displayed) = %h", cart_data);
+                8'h07: $display("[ACID] CRTC: R7 (Vertical Sync Position) = %h", cart_data);
+                8'h08: $display("[ACID] CRTC: R8 (Interlace & Skew) = %h", cart_data);
+                8'h09: $display("[ACID] CRTC: R9 (Maximum Raster) = %h", cart_data);
+                8'h0A: $display("[ACID] CRTC: R10 (Cursor Start) = %h", cart_data);
+                8'h0B: $display("[ACID] CRTC: R11 (Cursor End) = %h", cart_data);
+                8'h0C: $display("[ACID] CRTC: R12 (Start Address High) = %h", cart_data);
+                8'h0D: $display("[ACID] CRTC: R13 (Start Address Low) = %h", cart_data);
+                8'h0E: $display("[ACID] CRTC: R14 (Cursor Address High) = %h", cart_data);
+                8'h0F: $display("[ACID] CRTC: R15 (Cursor Address Low) = %h", cart_data);
+                8'h10: $display("[ACID] CRTC: R16 (Light Pen High) = %h", cart_data);
+                8'h11: $display("[ACID] CRTC: R17 (Light Pen Low) = %h", cart_data);
+                default: $display("[ACID] CRTC: Unknown register %h = %h", reg_num, cart_data);
+            endcase
+        end
+  */      
+        // Protection state machine
+        case (protection_state)
+            P_IDLE: begin
+                // Wait for protection pattern
+            end
+            
+            P_DETECTING: begin
+                // Monitor for challenge sequence
+                if (protection_index >= 4) begin  // Need at least 4 bytes for challenge
+                    // Check for known challenge patterns
+                    if (protection_sequence[0] == PROTECTION_PATTERN_1 &&
+                        protection_sequence[1] == PROTECTION_PATTERN_2) begin
+                        protection_state <= P_CHALLENGE;
+                        protection_active <= 1;
+                        $display("[ACID] Protection challenge detected! Pattern: %h %h", 
+                                protection_sequence[0], protection_sequence[1]);
+                    end else begin
+                        protection_state <= P_IDLE;
+                        $display("[ACID] Invalid protection pattern: %h %h", 
+                                protection_sequence[0], protection_sequence[1]);
+                    end
+                end
+            end
+            
+            P_CHALLENGE: begin
+                // Monitor for challenge completion
+                if (protection_index >= 8) begin  // Full challenge sequence
+                    protection_state <= P_RESPONSE;
+                    $display("[ACID] Protection challenge sequence: %h %h %h %h %h %h %h %h",
+                            protection_sequence[0], protection_sequence[1],
+                            protection_sequence[2], protection_sequence[3],
+                            protection_sequence[4], protection_sequence[5],
+                            protection_sequence[6], protection_sequence[7]);
+                end
+            end
+            
+            P_RESPONSE: begin
+                // Monitor for response sequence
+                if (protection_index >= 12) begin  // Full response sequence
+                    protection_state <= P_IDLE;
+                    protection_active <= 0;
+                    protection_index <= 0;
+                    $display("[ACID] Protection response sequence: %h %h %h %h",
+                            protection_sequence[8], protection_sequence[9],
+                            protection_sequence[10], protection_sequence[11]);
+                    $display("[ACID] Unlock sequence complete - checking validity");
                 end
             end
         endcase
