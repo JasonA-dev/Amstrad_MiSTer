@@ -79,11 +79,13 @@ assign tape_wr_ack = tape_wr; // Immediate acknowledgment in simulation
 always @(posedge clk) begin
     // CPU/chipset read/write
     if (we) begin
+		//$display("DEBUG: SDRAM Write - addr=%h, data=%h", addr, din);
         // Always write to the original address
         ram[addr] <= din;
     end
     
     if (oe) begin
+		//$display("DEBUG: SDRAM Read - addr=%h, data=%h", addr, ram[addr]);
         out_data <= ram[addr];
     end
     
@@ -100,7 +102,7 @@ always @(posedge clk) begin
         tape_rd_ack <= ~tape_rd_ack; // Toggle ack to indicate completion
     end
 end
-
+/*
 // Initialize memory to zeros
 initial begin
     integer i;
@@ -113,5 +115,5 @@ initial begin
     tape_data = 8'h00;
     tape_rd_ack = 0;
 end
-
+*/
 endmodule 
