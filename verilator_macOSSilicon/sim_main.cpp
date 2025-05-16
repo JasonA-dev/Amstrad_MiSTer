@@ -282,9 +282,9 @@ int main(int argc, char** argv, char** env) {
 	//bus.QueueDownload("./cpr/Burnin' Rubber (1990)(Ocean).CPR", 5, true);	     	// no execution
 	//bus.QueueDownload("./cpr/Crazy Cars 2 (1990)(Titus).CPR", 5, true);       	// no execution
 	//bus.QueueDownload("./cpr/Crazy Cars 2 (1990)(Titus)[a].CPR", 5, true);  		// black screen, no protection detected,sprite data downloading
-	bus.QueueDownload("./cpr/Dick Tracy (1990)(Titus).CPR", 5, true); 			// black screen
-	//bus.QueueDownload("./cpr/Enforcer, The (1990)(Trojan).CPR", 5, true);  		// blue border, white screen
-	//bus.QueueDownload("./cpr/Fire and Forget 2 (1990)(Titus).CPR", 5, true); 		// black screen
+	//bus.QueueDownload("./cpr/Dick Tracy (1990)(Titus).CPR", 5, true); 			    // black screen, no protection detected, fixed ACID unlock sequence
+	//bus.QueueDownload("./cpr/Enforcer, The (1990)(Trojan).CPR", 5, true);  		// blue border, no protection detected, white screen, fixed ACID unlock sequence
+	bus.QueueDownload("./cpr/Fire and Forget 2 (1990)(Titus).CPR", 5, true); 		// black screen
 	//bus.QueueDownload("./cpr/Klax (1990)(Domark).CPR", 5, true);  				// black screen
 	//bus.QueueDownload("./cpr/Klax (1990)(Domark)[a].CPR", 5, true); 				// black screen
 	//bus.QueueDownload("./cpr/Mystical (1990)(Infogrames).CPR", 5, true);			// no execution

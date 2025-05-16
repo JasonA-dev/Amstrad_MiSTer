@@ -18,23 +18,23 @@ module GX4000_ACID
 
     // Unlock sequence (17 bytes)
     localparam [7:0] UNLOCK_SEQ [0:16] = '{
-        8'hFF,  // RQ00 - must be different from 0
-        8'h00,  // 0
-        8'hFF,  // 255
-        8'h77,  // 119
-        8'hB3,  // 179
-        8'h51,  // 81
-        8'hA8,  // 168
-        8'hD4,  // 212
-        8'h62,  // 98
-        8'h39,  // 57
-        8'h9C,  // 156
-        8'h46,  // 70
-        8'h2B,  // 43
-        8'h15,  // 21
-        8'h8A,  // 138
-        8'hCD,  // STATE (205) for UNLOCK
-        8'hEE   // ACQ (any value if STATE=205)
+        8'hFF,  // First byte
+        8'h77,  // Second byte
+        8'hB3,  // Third byte
+        8'h51,  // Fourth byte
+        8'hA8,  // Fifth byte
+        8'hD4,  // Sixth byte
+        8'h62,  // Seventh byte
+        8'h39,  // Eighth byte
+        8'h9C,  // Ninth byte
+        8'h46,  // Tenth byte
+        8'h2B,  // Eleventh byte
+        8'h15,  // Twelfth byte
+        8'h8A,  // Thirteenth byte
+        8'hCD,  // Fourteenth byte (STATE)
+        8'hEE,  // Fifteenth byte
+        8'hFF,  // Sixteenth byte
+        8'hFF   // Final byte
     };
 
     // State machine states
@@ -106,18 +106,11 @@ module GX4000_ACID
                                 status_reg <= UNLOCK_SEQ[16];
                                 next_byte <= UNLOCK_SEQ[16];
                                 $display("[ACID] UNLOCKED! STATE byte (0xCD) read correctly from BC%02X", cpu_addr[7:0]);
-                                //$display("[ACID] Full sequence received:");
-                                //for (int i = 0; i < 16; i++) begin
-                                //    $display("[ACID] Step %d: Received %h, Expected %h", 
-                                //            i, received_seq[i], UNLOCK_SEQ[i]);
-                                //end
                             end
                             else begin
                                 seq_index <= seq_index + 1'd1;
                                 status_reg <= UNLOCK_SEQ[seq_index + 1'd1];
                                 next_byte <= UNLOCK_SEQ[seq_index + 1'd1];
-                                //$display("[ACID] Correct byte %h read from BC%02X, moving to step %d", 
-                                //       next_byte, cpu_addr[7:0], seq_index + 1);
                             end
                         end
                         else begin
@@ -133,7 +126,6 @@ module GX4000_ACID
 
                     PERM_UNLOCKED: begin
                         // Stay in PERM_UNLOCKED state, no more unlock attempts needed
-                        //$display("[ACID] Already permanently unlocked, ignoring read from BC%02X", cpu_addr[7:0]);
                     end
 
                     default: state <= LOCKED;
@@ -142,12 +134,65 @@ module GX4000_ACID
             
             // Debug write operations - detect rising edge of write
             if (cpu_wr && !last_cpu_wr && cpu_addr[15:8] == 8'hBC) begin
-                $display("[ACID] Write to BC%02X: Data=%h, Status=%h, State=%s, Step=%d", 
-                        cpu_addr[7:0],
-                        cpu_data_in,
-                        status_reg, 
-                        state == LOCKED ? "LOCKED" : state == UNLOCKING ? "UNLOCKING" : "UNLOCKED",
-                        seq_index);
+                // Check if this is part of the unlock sequence
+                if (cpu_addr[7:0] == cpu_data_in) begin
+                    $display("[ACID] Unlock write: BC%02X = %h (matches address)", 
+                            cpu_addr[7:0], cpu_data_in);
+                            
+                    // Process as part of unlock sequence
+                    case (state)
+                        LOCKED: begin
+                            if (cpu_data_in == UNLOCK_SEQ[0]) begin
+                                state <= UNLOCKING;
+                                seq_index <= 5'd1;
+                                status_reg <= UNLOCK_SEQ[1];
+                                next_byte <= UNLOCK_SEQ[1];
+                                attempt_count <= attempt_count + 1'd1;
+                                $display("[ACID] Starting unlock sequence - Attempt %d", attempt_count + 1);
+                            end
+                        end
+                        
+                        UNLOCKING: begin
+                            if (cpu_data_in == UNLOCK_SEQ[seq_index]) begin
+                                received_seq[seq_index] <= cpu_data_in;
+                                if (seq_index == 15) begin
+                                    // STATE byte received - unlock ASIC
+                                    state <= PERM_UNLOCKED;
+                                    seq_index <= seq_index + 1'd1;
+                                    status_reg <= UNLOCK_SEQ[16];
+                                    next_byte <= UNLOCK_SEQ[16];
+                                    $display("[ACID] UNLOCKED! Complete sequence received");
+                                end else begin
+                                    seq_index <= seq_index + 1'd1;
+                                    status_reg <= UNLOCK_SEQ[seq_index + 1'd1];
+                                    next_byte <= UNLOCK_SEQ[seq_index + 1'd1];
+                                    $display("[ACID] Unlock sequence progress: %d/16", seq_index + 1);
+                                end
+                            end else begin
+                                // Wrong byte - reset sequence
+                                state <= LOCKED;
+                                seq_index <= '0;
+                                status_reg <= UNLOCK_SEQ[0];
+                                next_byte <= UNLOCK_SEQ[0];
+                                $display("[ACID] Wrong byte %h, expected %h - Resetting sequence", 
+                                        cpu_data_in, UNLOCK_SEQ[seq_index]);
+                            end
+                        end
+                        
+                        PERM_UNLOCKED: begin
+                            // Already unlocked, ignore writes
+                        end
+                        
+                        default: state <= LOCKED;
+                    endcase
+                end else begin
+                    $display("[ACID] Write to BC%02X: Data=%h, Status=%h, State=%s, Step=%d", 
+                            cpu_addr[7:0],
+                            cpu_data_in,
+                            status_reg, 
+                            state == LOCKED ? "LOCKED" : state == UNLOCKING ? "UNLOCKING" : "UNLOCKED",
+                            seq_index);
+                end
             end
         end
     end
