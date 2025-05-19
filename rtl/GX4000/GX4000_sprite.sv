@@ -24,7 +24,14 @@ module GX4000_sprite
     
     // Configuration
     input   [7:0] config_sprite,
-    output  [7:0] collision_flags
+    output  [7:0] collision_flags,
+
+    // ASIC RAM interface
+    output [13:0] asic_ram_addr,
+    output        asic_ram_rd,
+    input  [7:0]  asic_ram_q,
+    output        asic_ram_wr,
+    output [7:0]  asic_ram_din
 );
 
     // Basic sprite registers
@@ -42,9 +49,6 @@ module GX4000_sprite
     reg [7:0] sprite_flip_x[0:7];
     reg [7:0] sprite_flip_y[0:7];
     reg [7:0] sprite_effect[0:7];
-    
-    // Sprite memory - initialize to avoid "never assigned" warning
-    reg [7:0] sprite_data[0:2047] = '{default: 8'h00};
     
     // Sprite state
     reg [2:0] active_sprite;
@@ -176,7 +180,7 @@ module GX4000_sprite
 
     // Create a proper address for sprite_data lookup
     wire [10:0] full_sprite_addr = {sprite_pattern[active_sprite], sprite_line[3:0], sprite_pixel_count[3:0]};
-    wire [7:0] sprite_pixel_data = sprite_data[full_sprite_addr[10:0] & 11'h7FF];
+    wire [7:0] sprite_pixel_data = asic_ram_q;
     
     // Sprite output with effects applied
     reg [7:0] sprite_pixel_with_effects;
@@ -216,5 +220,14 @@ module GX4000_sprite
     assign sprite_pixel = sprite_pixel_with_effects;
     assign sprite_active = sprite_pixel_data != 0;
     assign collision_flags = collision_reg;
+
+    // When fetching sprite data for rendering:
+    // set asic_ram_addr to the sprite data address
+    // set asic_ram_rd to 1 for one cycle
+    // use asic_ram_q as the fetched value
+    assign asic_ram_addr = {sprite_pattern[active_sprite], sprite_line[3:0], sprite_pixel_count[3:0]};
+    assign asic_ram_rd = 1;
+    assign asic_ram_wr = 0;
+    assign asic_ram_din = 0;
 
 endmodule 

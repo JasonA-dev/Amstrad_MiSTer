@@ -462,6 +462,7 @@ PlusMode cart_inst
     .b_in(b),
     .hblank(hbl),
     .vblank(vbl),
+    .hsync(hs),
     .r_out(plus_r),
     .g_out(plus_g),
     .b_out(plus_b),
@@ -527,14 +528,14 @@ always @(posedge clk_48) begin
             
             // Log every 1000th pixel for debugging
             if (vga_pixel_counter % 1000 == 0) begin
-                $display("[VGA_OUT] Pixel %d: R=%h G=%h B=%h", 
-                        vga_pixel_counter, VGA_R, VGA_G, VGA_B);
+                //$display("[VGA_OUT] Pixel %d: R=%h G=%h B=%h", 
+                //        vga_pixel_counter, VGA_R, VGA_G, VGA_B);
             end
         end
         
         if (VGA_VB) begin
             vga_frame_counter <= vga_frame_counter + 1;
-            $display("[VGA_OUT] Frame %d complete: %d pixels", vga_frame_counter, vga_pixel_counter);
+            //$display("[VGA_OUT] Frame %d complete: %d pixels", vga_frame_counter, vga_pixel_counter);
             vga_pixel_counter <= 0;
         end
     end

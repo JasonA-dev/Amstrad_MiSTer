@@ -18,6 +18,7 @@ module PlusMode
     input   [1:0] b_in,
     input         hblank,
     input         vblank,
+    input         hsync,         // Added hsync input
     output  [3:0] r_out,
     output  [3:0] g_out,
     output  [3:0] b_out,
@@ -78,6 +79,13 @@ module PlusMode
     wire        cart_wr_int;    // Internal cartridge write
     wire        cart_rd = 1'b0; // Fixed to 0 as it's only an input to cart_inst
     
+    // ASIC RAM interface wires
+    wire [13:0] asic_ram_addr;
+    wire        asic_ram_rd;
+    wire        asic_ram_wr;
+    wire [7:0]  asic_ram_din;
+    wire [7:0]  asic_ram_q;
+    
     // Assign cartridge outputs
     assign cart_addr = cart_addr_int;
     assign cart_data = cart_data_int;
@@ -123,6 +131,7 @@ module PlusMode
         .b_in(b_in),
         .hblank(hblank),
         .vblank(vblank),
+        .hsync(hsync),         // Added hsync input
         
         // Video output
         .r_out(r_out),
@@ -132,7 +141,13 @@ module PlusMode
         // Sprite interface outputs (for audio module)
         .sprite_active(sprite_active),
         .sprite_id(sprite_id),
-        .collision_reg(collision_reg)
+        .collision_reg(collision_reg),
+        // ASIC RAM interface
+        .asic_ram_addr(asic_ram_addr),
+        .asic_ram_rd(asic_ram_rd),
+        .asic_ram_wr(asic_ram_wr),
+        .asic_ram_din(asic_ram_din),
+        .asic_ram_q(asic_ram_q)
     );
 
     // CRTC write handling
@@ -150,9 +165,35 @@ module PlusMode
         // CPU interface
         .cpu_addr(cpu_addr),
         .cpu_data_in(cpu_data_in),  // Use cpu_data_in
-        .cpu_wr(cpu_wr && crtc_write),  // Don't process CRTC writes in ACID
-        .cpu_rd(cpu_rd && crtc_read),   // Don't process CRTC reads in ACID
+        .cpu_wr(cpu_wr),  // Don't process CRTC writes in ACID
+        .cpu_rd(cpu_rd),   // Don't process CRTC reads in ACID
         .cpu_data_out(acid_data_out),  // Connect ACID data output
+        
+        // Hardware register inputs
+        .sprite_control(sprite_id),           // Connect sprite ID as control
+        .sprite_collision(collision_reg),     // Connect collision register
+        .audio_control(audio_status),         // Connect audio status as control
+        .audio_status(audio_status),          // Connect audio status
+        .video_status({6'b000000, sprite_active, 1'b0}), // Video status with sprite active bit
+        
+        // I/O hardware inputs
+        .joy1_data(joy1),               // Connect joystick 1 data
+        .joy2_data(joy2),               // Connect joystick 2 data
+        .joy_swap(joy_swap),             // Connect joystick swap flag
+        .io_status(8'h00),                   // I/O status (to be implemented)
+        .io_control(8'h00),                  // I/O control (to be implemented)
+        .io_data(8'h00),                     // I/O data (to be implemented)
+        .io_direction(8'h00),                // I/O direction (to be implemented)
+        .io_interrupt(8'h00),                // I/O interrupt (to be implemented)
+        .io_timer(8'h00),                    // I/O timer (to be implemented)
+        .io_clock(8'h00),                    // I/O clock (to be implemented)
+        
+        // ASIC RAM interface
+        .asic_ram_addr(asic_ram_addr),
+        .asic_ram_rd(asic_ram_rd),
+        .asic_ram_wr(asic_ram_wr),
+        .asic_ram_din(asic_ram_din),
+        .asic_ram_q(asic_ram_q),
         
         // Status outputs
         .asic_valid(asic_valid),
@@ -228,13 +269,36 @@ module PlusMode
     // Connect data sources to CPU data bus
     assign cpu_data_out = acid_read ? acid_data : 8'h00;  // Drive output with ACID data when reading from BC00
 
-/*
-    // Debug output for ACID reads
+    // Define ASIC page enabled signal
+    wire asic_page_enabled = plus_mode && use_asic && (cpu_addr >= 16'h4000) && (cpu_addr <= 16'h7FFF);
+
+    // Log all ASIC-related I/O port accesses
     always @(posedge clk_sys) begin
-        if (acid_read) begin
-            $display("[PlusMode] ACID read from BC00: data=%h, plus_mode=%b, use_asic=%b", 
-                    acid_data_out, plus_mode, use_asic);
+        if (cpu_wr) begin
+            if ((cpu_addr[15:8] == 8'h7F) || (cpu_addr[15:8] == 8'hDF) ||
+                (cpu_addr[15:8] == 8'hBC) || (cpu_addr[15:8] == 8'hBD) ||
+                (cpu_addr[15:8] == 8'hBE) || (cpu_addr[15:8] == 8'hBF)) begin
+                //$display("[ASIC] CPU WRITE to port %04X: Data=%02X", cpu_addr, cpu_data_in);
+            end
+        end
+        if (cpu_rd) begin
+            if ((cpu_addr[15:8] == 8'h7F) || (cpu_addr[15:8] == 8'hDF) ||
+                (cpu_addr[15:8] == 8'hBC) || (cpu_addr[15:8] == 8'hBD) ||
+                (cpu_addr[15:8] == 8'hBE) || (cpu_addr[15:8] == 8'hBF)) begin
+                //$display("[ASIC] CPU READ from port %04X", cpu_addr);
+            end
         end
     end
-*/
+
+    // Log all accesses to ASIC I/O page (when enabled)
+    always @(posedge clk_sys) begin
+        if (asic_page_enabled) begin
+            if (cpu_wr) begin
+                //$display("[ASIC] CPU WRITE to ASIC page %04X: Data=%02X", cpu_addr, cpu_data_in);
+            end
+            if (cpu_rd) begin
+                //$display("[ASIC] CPU READ from ASIC page %04X", cpu_addr);
+            end
+        end
+    end
 endmodule 

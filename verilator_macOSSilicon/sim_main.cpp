@@ -276,41 +276,51 @@ int main(int argc, char** argv, char** env) {
 	//bus.QueueDownload("./diagnostics.rom", 0, true);
 	//bus.QueueDownload("./CPC_PLUS.CPR", 5, true);
 
-	//bus.QueueDownload("./cpr/Barbarian II (1990)(Ocean).CPR", 5, true);	   		// video + text
-	//bus.QueueDownload("./cpr/Batman the Movie (1990)(Ocean).CPR", 5, true);	  	// black border, no protection detected
-	//bus.QueueDownload("./cpr/Batman the Movie (1990)(Ocean)[a].CPR", 5, true);  	// black border, no protection detected
-	//bus.QueueDownload("./cpr/Burnin' Rubber (1990)(Ocean).CPR", 5, true);	     	// no execution
-	//bus.QueueDownload("./cpr/Crazy Cars 2 (1990)(Titus).CPR", 5, true);       	// no execution
-	//bus.QueueDownload("./cpr/Crazy Cars 2 (1990)(Titus)[a].CPR", 5, true);  		// black screen, no protection detected, sprite data downloading
-	//bus.QueueDownload("./cpr/Dick Tracy (1990)(Titus).CPR", 5, true); 			// black screen, no protection detected, fixed ACID unlock sequence
-	//bus.QueueDownload("./cpr/Enforcer, The (1990)(Trojan).CPR", 5, true);  		// blue border,  no protection detected, white screen, fixed ACID unlock sequence
-	bus.QueueDownload("./cpr/Fire and Forget 2 (1990)(Titus).CPR", 5, true); 		// black screen, no protection detected, fixed ACID unlock sequence, sprite data downloading, banding
-	//bus.QueueDownload("./cpr/Klax (1990)(Domark).CPR", 5, true);  				// black screen, no protection detected, no ACID unlock sequence, sprite data downloading
-	//bus.QueueDownload("./cpr/Klax (1990)(Domark)[a].CPR", 5, true); 				// black screen, no protection detected, no ACID unlock sequence, sprite data downloading
-	//bus.QueueDownload("./cpr/Mystical (1990)(Infogrames).CPR", 5, true);			// no execution, no protection detected, no ACID unlock sequence, sprite data downloading
-	//bus.QueueDownload("./cpr/Navy Seals (1990)(Ocean).CPR", 5, true);				// no execution, no protection detected, no ACID unlock sequence, sprite data downloading
-	//bus.QueueDownload("./cpr/Navy Seals (1990)(Ocean)[a].CPR", 5, true);			// no execution, no protection detected, no ACID unlock sequence, sprite data downloading
-	//bus.QueueDownload("./cpr/No Exit (1990)(Tomahawk).CPR", 5, true); 			// no execution
-	//bus.QueueDownload("./cpr/No Exit (1990)(Tomahawk)[a].CPR", 5, true);			// no execution, no protection detected, no ACID unlock sequence, sprite data downloading
-	//bus.QueueDownload("./cpr/Operation Thunderbolt (1990)(Ocean).CPR", 5, true);	// blue screen, no protection detected, ACID unlock sequence, stuck at 7CFB
-	//bus.QueueDownload("./cpr/Operation Thunderbolt (1990)(Ocean)[a].CPR", 5, true); // blue screen, no protection detected, ACID unlock sequence, proceeds beyond 7CFB
-	//bus.QueueDownload("./cpr/Pang (1990)(Ocean).CPR", 5, true);					// blue border, white screen, no protection detected, no ACID unlock sequence
-	//bus.QueueDownload("./cpr/Pang (1990)(Ocean)[a].CPR", 5, true);				// blue border, white screen, no protection detected, no ACID unlock sequence, sprite data downloading
-	//bus.QueueDownload("./cpr/Panza Kick Boxing (1991)(Loriciel).CPR", 5, true);	// no execution, no protection, no ACID unlock, sprite download		
-	//bus.QueueDownload("./cpr/Plotting (1990)(Ocean).CPR", 5, true);				// black screen, no protection detected, ACID unlock sequence, mode switching
-	//bus.QueueDownload("./cpr/Plotting (1990)(Ocean)[a].CPR", 5, true);			// black screen, no protection detected, ACID unlock sequence, mode switching
-	//bus.QueueDownload("./cpr/Pro Tennis Tour (1990)(UBI Soft).CPR", 5, true);     // blue screen, no protection detected, ACID unlock sequence, secondary palette, stops at frame 11
-	//bus.QueueDownload("./cpr/Pro Tennis Tour (1990)(UBI Soft)[a].CPR", 5, true);  // blue screen, no protection detected, no ACID unlock sequence, secondary palette, stops at frame 11
-	//bus.QueueDownload("./cpr/Robocop 2 (1990)(Ocean).CPR", 5, true);              // black screen, no protection detected, ACID unlock sequence, mode switching
-	//bus.QueueDownload("./cpr/Robocop 2 (1990)(Ocean)[a].CPR", 5, true); 			// black screen, no protection detected, ACID unlock sequence, mode switching
-	//bus.QueueDownload("./cpr/Skeet Shoot (1990)(Trojan).CPR", 5, true);           // black screen, no protection detected, ACID unlock sequence, mode switching
-	//bus.QueueDownload("./cpr/Super Pinball Magic (1991)(Loricel).CPR", 5, true);  // no execution, no protection detected, ACID unlock sequence, sprite data downloading
-	//bus.QueueDownload("./cpr/Switchblade (1990)(Gremlin).CPR", 5, true);          // no execution, no protection detected, no ACID unlock sequence, sprite data downloading, secondary palette
-	//bus.QueueDownload("./cpr/Switchblade (1990)(Gremlin)[a].CPR", 5, true);       // blue screen, no protection detected, no ACID unlock sequence, sprite data downloading, secondary palette
-	//bus.QueueDownload("./cpr/Tennis Cup 2 (1990)(Loriciel).CPR", 5, true);        // black screen, no protection detected, ACID unlock sequence
+	//bus.QueueDownload("./cpr/Barbarian II (1990)(Ocean).CPR", 5, true);	   		  // video + text
+	//bus.QueueDownload("./cpr/Batman the Movie (1990)(Ocean).CPR", 5, true);	  	  // black border, no protection detected
+	//bus.QueueDownload("./cpr/Batman the Movie (1990)(Ocean)[a].CPR", 5, true);  	  // black border, no protection detected
+	
+	//bus.QueueDownload("./cpr/Burnin' Rubber (1990)(Ocean).CPR", 5, true);	     	  // no execution
+	//bus.QueueDownload("./cpr/Crazy Cars 2 (1990)(Titus).CPR", 5, true);       	  // no execution
+
+	//bus.QueueDownload("./cpr/Crazy Cars 2 (1990)(Titus)[a].CPR", 5, true);  		  // black screen, no protection detected, sprite data downloading
+	//bus.QueueDownload("./cpr/Dick Tracy (1990)(Titus).CPR", 5, true); 			  // black screen, no protection detected, fixed ACID unlock sequence
+	//bus.QueueDownload("./cpr/Enforcer, The (1990)(Trojan).CPR", 5, true);  		  // blue border,  no protection detected, white screen, fixed ACID unlock sequence
+	bus.QueueDownload("./cpr/Fire and Forget 2 (1990)(Titus).CPR", 5, true); 		  // black screen, no protection detected, fixed ACID unlock sequence, sprite data downloading, banding
+	//bus.QueueDownload("./cpr/Klax (1990)(Domark).CPR", 5, true);  				  // black screen, no protection detected, no ACID unlock sequence, sprite data downloading
+	//bus.QueueDownload("./cpr/Klax (1990)(Domark)[a].CPR", 5, true); 				  // black screen, no protection detected, no ACID unlock sequence, sprite data downloading
+
+	//bus.QueueDownload("./cpr/Mystical (1990)(Infogrames).CPR", 5, true);			  // no execution, no protection detected, no ACID unlock sequence, sprite data downloading
+	//bus.QueueDownload("./cpr/Navy Seals (1990)(Ocean).CPR", 5, true);				  // no execution, no protection detected, no ACID unlock sequence, sprite data downloading
+	//bus.QueueDownload("./cpr/Navy Seals (1990)(Ocean)[a].CPR", 5, true);			  // no execution, no protection detected, no ACID unlock sequence, sprite data downloading
+	//bus.QueueDownload("./cpr/No Exit (1990)(Tomahawk).CPR", 5, true); 			  // no execution
+	//bus.QueueDownload("./cpr/No Exit (1990)(Tomahawk)[a].CPR", 5, true);			  // no execution, no protection detected, no ACID unlock sequence, sprite data downloading
+
+	//bus.QueueDownload("./cpr/Operation Thunderbolt (1990)(Ocean).CPR", 5, true);	  // blue screen,  no protection detected, ACID unlock sequence, stuck at 7CFB
+	//bus.QueueDownload("./cpr/Operation Thunderbolt (1990)(Ocean)[a].CPR", 5, true); // blue screen,  no protection detected, ACID unlock sequence, proceeds beyond 7CFB
+	//bus.QueueDownload("./cpr/Pang (1990)(Ocean).CPR", 5, true);					  // blue border, white screen, no protection detected, no ACID unlock sequence
+	//bus.QueueDownload("./cpr/Pang (1990)(Ocean)[a].CPR", 5, true);				  // blue border, white screen, no protection detected, no ACID unlock sequence, sprite data downloading
+
+	//bus.QueueDownload("./cpr/Panza Kick Boxing (1991)(Loriciel).CPR", 5, true);	  // no execution, no protection detected, no ACID unlock sequence, sprite data downloading		
+
+	//bus.QueueDownload("./cpr/Plotting (1990)(Ocean).CPR", 5, true);				  // black screen, no protection detected, ACID unlock sequence, mode switching
+	//bus.QueueDownload("./cpr/Plotting (1990)(Ocean)[a].CPR", 5, true);			  // black screen, no protection detected, ACID unlock sequence, mode switching
+	//bus.QueueDownload("./cpr/Pro Tennis Tour (1990)(UBI Soft).CPR", 5, true);       // blue screen,  no protection detected, ACID unlock sequence, secondary palette, stops at frame 11
+	//bus.QueueDownload("./cpr/Pro Tennis Tour (1990)(UBI Soft)[a].CPR", 5, true);    // blue screen,  no protection detected, no ACID unlock sequence, secondary palette, stops at frame 11
+	//bus.QueueDownload("./cpr/Robocop 2 (1990)(Ocean).CPR", 5, true);                // black screen, no protection detected, ACID unlock sequence, mode switching
+	//bus.QueueDownload("./cpr/Robocop 2 (1990)(Ocean)[a].CPR", 5, true); 		      // black screen, no protection detected, ACID unlock sequence, mode switching
+	//bus.QueueDownload("./cpr/Skeet Shoot (1990)(Trojan).CPR", 5, true);             // black screen, no protection detected, ACID unlock sequence, mode switching
+
+	//bus.QueueDownload("./cpr/Super Pinball Magic (1991)(Loricel).CPR", 5, true);    // no execution, no protection detected, ACID unlock sequence, sprite data downloading
+	//bus.QueueDownload("./cpr/Switchblade (1990)(Gremlin).CPR", 5, true);            // no execution, no protection detected, no ACID unlock sequence, sprite data downloading, secondary palette
+
+	//bus.QueueDownload("./cpr/Switchblade (1990)(Gremlin)[a].CPR", 5, true);         // blue screen,  no protection detected, no ACID unlock sequence, sprite data downloading, secondary palette
+	//bus.QueueDownload("./cpr/Tennis Cup 2 (1990)(Loriciel).CPR", 5, true);          // black screen, no protection detected, ACID unlock sequence
+
     //bus.QueueDownload("./cpr/Tin Tin on the Moon (1990)(Infogrames).CPR", 5, true); // no execution, no protection detected, ACID unlock sequence, mode switching
-	//bus.QueueDownload("./cpr/Wild Streets (1990)(Titus).CPR", 5, true);             // blue screen no protection detected, ACID unlock sequence, secondary palette, sprite data downloading
-	//bus.QueueDownload("./cpr/Wild Streets (1990)(Titus)[a].CPR", 5, true);          // blue screen, no protection detected, ACID unlock sequence, sprite data downloading
+
+	//bus.QueueDownload("./cpr/Wild Streets (1990)(Titus).CPR", 5, true);             // blue screen   no protection detected, ACID unlock sequence, secondary palette, sprite data downloading
+	//bus.QueueDownload("./cpr/Wild Streets (1990)(Titus)[a].CPR", 5, true);          // blue screen,  no protection detected, ACID unlock sequence, sprite data downloading
 	//bus.QueueDownload("./cpr/World of Sports (1990)(Epyx).CPR", 5, true);           // black screen, no protection detected, ACID unlock sequence, sprite data downloading
 	//bus.QueueDownload("./cpr/World of Sports (1990)(Epyx)[a].CPR", 5, true);        // black screen, no protection detected, ACID unlock sequence, sprite data downloading
 
@@ -388,7 +398,11 @@ int main(int argc, char** argv, char** env) {
 		ImGui::SetWindowSize("Memory Editor", ImVec2(500, 200), ImGuiCond_Once);
 		if (ImGui::BeginTabBar("##memory_editor")) {
 			if (ImGui::BeginTabItem("RAM (8MB)")) {
-				mem_edit.DrawContents(&top->top__DOT__sdram__DOT__ram[0], 8388608, 0); // 64K
+				mem_edit.DrawContents(&top->top__DOT__sdram__DOT__ram[0], 8388608, 0); // 8MB
+				ImGui::EndTabItem();
+			}
+			if (ImGui::BeginTabItem("ASIC RAM (16K)")) {
+				mem_edit.DrawContents(&top->top__DOT__cart_inst__DOT__acid_inst__DOT__asic_ram[0], 16384, 0); // 16K
 				ImGui::EndTabItem();
 			}
 			ImGui::EndTabBar();
