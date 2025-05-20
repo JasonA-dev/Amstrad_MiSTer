@@ -45,10 +45,61 @@ module GX4000_video
     // ASIC RAM interface
     output [13:0] asic_ram_addr,
     output        asic_ram_rd,
-    input  [7:0]  asic_ram_q,
+    inout  [7:0]  asic_ram_q,  // Changed from input to inout
     output        asic_ram_wr,
-    output [7:0]  asic_ram_din
+    output [7:0]  asic_ram_din,
+
+    // CRTC update interface
+    output reg        crtc_reg_wr,
+    output reg  [3:0] crtc_reg_sel,
+    output reg  [7:0] crtc_reg_data,
+
+    // GA40010 (Gate Array) update interface
+    output reg        ga_reg_wr,
+    output reg  [3:0] ga_reg_sel,
+    output reg  [7:0] ga_reg_data,
+
+    // Real ASIC sync signal inputs
+    input             asic_hsync_in,
+    input             asic_vsync_in,
+    input             asic_hblank_in,
+    input             asic_vblank_in
 );
+
+reg [7:0] asic_ram_q_reg;
+reg       asic_ram_q_oe;
+
+// ASIC Control Registers (0x7F00-0x7F0F)
+reg [7:0] asic_control;      // 0x7F00: ASIC Control Register
+reg [7:0] asic_status;       // 0x7F01: ASIC Status Register
+reg [7:0] asic_config;       // 0x7F02: ASIC Configuration Register
+reg [7:0] asic_version;      // 0x7F03: ASIC Version Register
+
+// Video Control Registers (0x7F10-0x7F1F)
+reg [7:0] video_control;     // 0x7F10: Video Mode Control
+reg [7:0] video_status;      // 0x7F11: Video Status
+reg [7:0] video_config;      // 0x7F12: Video Configuration
+reg [7:0] video_palette;     // 0x7F13: Video Palette Control
+reg [7:0] video_effect;      // 0x7F14: Video Effect Control
+
+// Sprite Control Registers (0x7F20-0x7F2F)
+reg [7:0] sprite_control;    // 0x7F20: Sprite Control
+reg [7:0] sprite_status;     // 0x7F21: Sprite Status
+reg [7:0] sprite_config;     // 0x7F22: Sprite Configuration
+reg [7:0] sprite_priority;   // 0x7F23: Sprite Priority Control
+reg [7:0] sprite_collision;  // 0x7F24: Sprite Collision Status
+
+// Audio Control Registers (0x7F30-0x7F3F)
+reg [7:0] audio_control;     // 0x7F30: Audio Control
+reg [7:0] audio_status;      // 0x7F31: Audio Status
+reg [7:0] audio_config;      // 0x7F32: Audio Configuration
+reg [7:0] audio_volume;      // 0x7F33: Audio Volume Control
+
+// Add at the top of the module:
+reg [13:0] asic_ram_addr_reg;
+reg        asic_ram_rd_reg;
+reg        asic_ram_wr_reg;
+reg [7:0]  asic_ram_din_reg;
 
     // Internal signals
     wire [7:0] collision_flags;
@@ -149,6 +200,9 @@ module GX4000_video
     reg vsync_filtered;
     reg hblank_filtered;
     reg vblank_filtered;
+
+    // ASIC sync signals
+    reg asic_hsync, asic_vsync, asic_hblank, asic_vblank;
 
     // Mode handling
     reg [1:0] video_mode;
@@ -294,7 +348,174 @@ module GX4000_video
         vsync_filtered = 1'b0;
         hblank_filtered = 1'b0;
         vblank_filtered = 1'b0;
+        asic_hsync = 0;
+        asic_vsync = 0;
+        asic_hblank = 0;
+        asic_vblank = 0;
+
+        // ASIC Control Registers
+    asic_control = 8'h00;
+    asic_status = 8'h00;
+    asic_config = 8'h00;
+    asic_version = 8'h01;  // Version 1.0
+
+    // Video Control Registers
+    video_control = 8'h00;
+    video_status = 8'h00;
+    video_config = 8'h00;
+    video_palette = 8'h00;
+    video_effect = 8'h00;
+
+    // Sprite Control Registers
+    sprite_control = 8'h00;
+    sprite_status = 8'h00;
+    sprite_config = 8'h00;
+    sprite_priority = 8'h00;
+    sprite_collision = 8'h00;
+
+    // Audio Control Registers
+    audio_control = 8'h00;
+    audio_status = 8'h00;
+    audio_config = 8'h00;
+    audio_volume = 8'h7F;  // Default volume    
     end
+
+// ASIC register handling for 0x7F00-0x7FFF range
+always @(posedge clk_sys) begin
+    if (reset) begin
+        // Reset all ASIC registers
+        asic_control <= 8'h00;
+        asic_status <= 8'h00;
+        asic_config <= 8'h00;
+        video_control <= 8'h00;
+        video_status <= 8'h00;
+        video_config <= 8'h00;
+        video_palette <= 8'h00;
+        video_effect <= 8'h00;
+        sprite_control <= 8'h00;
+        sprite_status <= 8'h00;
+        sprite_config <= 8'h00;
+        sprite_priority <= 8'h00;
+        sprite_collision <= 8'h00;
+        audio_control <= 8'h00;
+        audio_status <= 8'h00;
+        audio_config <= 8'h00;
+        audio_volume <= 8'h7F;
+    end else begin
+        // Handle register writes
+        if (cpu_wr && cpu_addr[15:8] == 8'h7F) begin
+            case (cpu_addr[7:0])
+                // ASIC Control Registers
+                8'h00: asic_control <= cpu_data;
+                8'h01: asic_status <= cpu_data;
+                8'h02: asic_config <= cpu_data;
+                
+                // Video Control Registers
+                8'h10: video_control <= cpu_data;
+                8'h11: video_status <= cpu_data;
+                8'h12: video_config <= cpu_data;
+                8'h13: video_palette <= cpu_data;
+                8'h14: video_effect <= cpu_data;
+                
+                // Sprite Control Registers
+                8'h20: sprite_control <= cpu_data;
+                8'h21: sprite_status <= cpu_data;
+                8'h22: sprite_config <= cpu_data;
+                8'h23: sprite_priority <= cpu_data;
+                8'h24: sprite_collision <= cpu_data;
+                
+                // Audio Control Registers
+                8'h30: audio_control <= cpu_data;
+                8'h31: audio_status <= cpu_data;
+                8'h32: audio_config <= cpu_data;
+                8'h33: audio_volume <= cpu_data;
+            endcase
+        end
+
+        // Update status registers
+        asic_status[0] <= asic_enabled;  // ASIC enabled bit
+        asic_status[1] <= plus_mode;     // Plus mode bit
+        asic_status[2] <= sync_filter;   // Sync filter status
+        asic_status[3] <= pri_irq;       // Priority interrupt status
+        asic_status[4] <= sprite_active; // Sprite active status
+        asic_status[5] <= |collision_flags; // Collision status
+        asic_status[6] <= crtc_de;       // Display enable status
+        asic_status[7] <= crtc_vsync;    // Vertical sync status
+
+        // Update video status
+        video_status[0] <= crtc_de;      // Display enable
+        video_status[1] <= crtc_vsync;   // Vertical sync
+        video_status[2] <= crtc_hsync;   // Horizontal sync
+        video_status[3] <= asic_enabled; // ASIC enabled
+        video_status[4] <= plus_mode;    // Plus mode
+        video_status[5] <= |sprite_active; // Sprite active
+        video_status[6] <= |collision_flags; // Collision detected
+        video_status[7] <= pri_irq;      // Priority interrupt
+
+        // Update sprite status
+        sprite_status[0] <= sprite_active; // Sprite active
+        sprite_status[1] <= |collision_flags; // Collision detected
+        sprite_status[2] <= sprite_priority[0]; // Priority status
+        sprite_status[3] <= asic_enabled; // ASIC enabled
+        sprite_status[4] <= plus_mode;    // Plus mode
+        sprite_status[5] <= crtc_de;      // Display enable
+        sprite_status[6] <= crtc_vsync;   // Vertical sync
+        sprite_status[7] <= crtc_hsync;   // Horizontal sync
+
+        // Update audio status
+        audio_status[0] <= asic_enabled;  // ASIC enabled
+        audio_status[1] <= plus_mode;     // Plus mode
+        audio_status[2] <= crtc_de;       // Display enable
+        audio_status[3] <= crtc_vsync;    // Vertical sync
+        audio_status[4] <= crtc_hsync;    // Horizontal sync
+        audio_status[5] <= sprite_active; // Sprite active
+        audio_status[6] <= |collision_flags; // Collision detected
+        audio_status[7] <= pri_irq;       // Priority interrupt
+    end
+end
+
+// ASIC register read handling
+always @(posedge clk_sys) begin
+    if (reset) begin
+        asic_ram_q_reg <= 8'h00;
+        asic_ram_q_oe <= 1'b0;
+    end else if (cpu_rd && cpu_addr[15:8] == 8'h7F) begin
+        asic_ram_q_oe <= 1'b1;
+        case (cpu_addr[7:0])
+            // ASIC Control Registers
+            8'h00: asic_ram_q_reg <= asic_control;
+            8'h01: asic_ram_q_reg <= asic_status;
+            8'h02: asic_ram_q_reg <= asic_config;
+            
+            // Video Control Registers
+            8'h10: asic_ram_q_reg <= video_control;
+            8'h11: asic_ram_q_reg <= video_status;
+            8'h12: asic_ram_q_reg <= video_config;
+            8'h13: asic_ram_q_reg <= video_palette;
+            8'h14: asic_ram_q_reg <= video_effect;
+            
+            // Sprite Control Registers
+            8'h20: asic_ram_q_reg <= sprite_control;
+            8'h21: asic_ram_q_reg <= sprite_status;
+            8'h22: asic_ram_q_reg <= sprite_config;
+            8'h23: asic_ram_q_reg <= sprite_priority;
+            8'h24: asic_ram_q_reg <= sprite_collision;
+            
+            // Audio Control Registers
+            8'h30: asic_ram_q_reg <= audio_control;
+            8'h31: asic_ram_q_reg <= audio_status;
+            8'h32: asic_ram_q_reg <= audio_config;
+            8'h33: asic_ram_q_reg <= audio_volume;
+            
+            default: asic_ram_q_reg <= 8'h00;
+        endcase
+    end else begin
+        asic_ram_q_oe <= 1'b0;
+    end
+end
+
+// Add tri-state buffer assignment
+assign asic_ram_q = asic_ram_q_oe ? asic_ram_q_reg : 8'bz;
 
     // CRTC synchronization
     always @(posedge clk_sys) begin
@@ -428,7 +649,10 @@ module GX4000_video
     
     // ASIC RAM control logic
     assign asic_ram_rd_en = crtc_clken_actual && crtc_de && asic_enabled;  // Only enable reads when ASIC is enabled
-    assign asic_ram_wr_en = asic_enabled && cpu_wr && (cpu_addr[15:8] == 8'hBC);
+    assign asic_ram_wr_en = asic_enabled && 
+        (cpu_wr && (cpu_addr[15:8] == 8'h60) && (cpu_addr[7:5] < 4'h2) || 
+         cpu_wr && (cpu_addr[15:8] == 8'h40) || 
+         (cpu_wr && (cpu_addr[15:8] == 8'hBC)));
     
     // Debug output for CRTC timing
     always @(posedge clk_sys) begin
@@ -489,13 +713,77 @@ module GX4000_video
     assign sprite_asic_ram_wr = asic_ram_wr_en && sprite_active_wire;
     
     // ASIC RAM interface
+    wire is_sprite_attr_write = cpu_wr && (cpu_addr[15:8] == 8'h60) && (cpu_addr[7:5] < 4'h2);
+    wire is_sprite_pattern_write = cpu_wr && (cpu_addr[15:8] == 8'h40);
+
     assign asic_ram_addr = asic_enabled ? 
-        (sprite_active_wire ? sprite_asic_ram_addr : 
-         {crtc_ra[2:0], crtc_ma[1:0]}) : 
+        (sprite_active_wire ? 
+            (sprite_asic_ram_addr[13:8] == 6'h00 ? 
+                SPRITE_ATTR_BASE + sprite_asic_ram_addr[4:0] :  // Attribute access
+                SPRITE_PATTERN_BASE + sprite_asic_ram_addr[13:0]  // Pattern access
+            ) : 
+            {crtc_ra[2:0], crtc_ma[1:0]}) : 
         crtc_ma;
-    assign asic_ram_rd = asic_ram_rd_en;
-    assign asic_ram_wr = asic_ram_wr_en;
-    assign asic_ram_din = cpu_data;
+
+    // Update ASIC RAM write control
+    assign asic_ram_wr_en = asic_enabled && 
+        (is_sprite_attr_write || is_sprite_pattern_write || 
+         (cpu_wr && (cpu_addr[15:8] == 8'hBC)));
+
+// Replace the continuous assignments with:
+assign asic_ram_rd = asic_ram_rd_reg;
+assign asic_ram_wr = asic_ram_wr_reg;
+assign asic_ram_din = asic_ram_din_reg;
+
+// Add new always block:
+always @(posedge clk_sys) begin
+    if (reset) begin
+        asic_ram_addr_reg <= 14'h0000;
+        asic_ram_rd_reg <= 1'b0;
+        asic_ram_wr_reg <= 1'b0;
+        asic_ram_din_reg <= 8'h00;
+    end else begin
+        // Default values
+        asic_ram_rd_reg <= 1'b0;
+        asic_ram_wr_reg <= 1'b0;
+
+        // Handle ASIC RAM reads
+        if (crtc_clken_actual && crtc_de && asic_enabled) begin
+            if (sprite_active_wire) begin
+                asic_ram_addr_reg <= (sprite_asic_ram_addr[13:8] == 6'h00) ? 
+                    (SPRITE_ATTR_BASE + sprite_asic_ram_addr[4:0]) : 
+                    (SPRITE_PATTERN_BASE + sprite_asic_ram_addr[13:0]);
+            end else begin
+                asic_ram_addr_reg <= {crtc_ra[2:0], crtc_ma[1:0]};
+            end
+            asic_ram_rd_reg <= 1'b1;
+        end
+
+        // Handle ASIC RAM writes
+        if (asic_enabled && cpu_wr) begin
+            if (cpu_addr[15:8] == 8'hBC) begin
+                asic_ram_addr_reg <= cpu_addr[13:0];
+                asic_ram_din_reg <= cpu_data;
+                asic_ram_wr_reg <= 1'b1;
+            end
+        end
+    end
+end
+
+    // Use real ASIC sync signal inputs
+    always @(posedge clk_sys) begin
+        if (reset) begin
+            asic_hsync  <= 0;
+            asic_vsync  <= 0;
+            asic_hblank <= 0;
+            asic_vblank <= 0;
+        end else if (crtc_clken_actual) begin
+            asic_hsync  <= asic_hsync_in;
+            asic_vsync  <= asic_vsync_in;
+            asic_hblank <= asic_hblank_in;
+            asic_vblank <= asic_vblank_in;
+        end
+    end
 
     // Sync signal generation
     always @(posedge clk_sys) begin
@@ -508,14 +796,14 @@ module GX4000_video
         end else if (crtc_clken_actual) begin
             if (asic_enabled) begin
                 // Plus mode: Use ASIC sync timing
-                sync_filter <= 1'b1;
-                hsync_filtered <= crtc_hsync;
-                vsync_filtered <= crtc_vsync;
-                hblank_filtered <= ~crtc_de;
-                vblank_filtered <= (crtc_ra == 5'h00);
+                sync_filter    <= 1'b1;
+                hsync_filtered <= asic_hsync;
+                vsync_filtered <= asic_vsync;
+                hblank_filtered <= asic_hblank;
+                vblank_filtered <= asic_vblank;
             end else begin
                 // Non-Plus mode: Use CRTC sync timing
-                sync_filter <= 1'b0;
+                sync_filter    <= 1'b0;
                 hsync_filtered <= crtc_hsync;
                 vsync_filtered <= crtc_vsync;
                 hblank_filtered <= ~crtc_de;
@@ -583,4 +871,39 @@ module GX4000_video
         end
     end
 
+    // CRTC and GA40010 register update logic
+    always @(posedge clk_sys) begin
+        if (reset) begin
+            crtc_reg_wr   <= 1'b0;
+            crtc_reg_sel  <= 4'b0000;
+            crtc_reg_data <= 8'h00;
+            ga_reg_wr     <= 1'b0;
+            ga_reg_sel    <= 4'b0000;
+            ga_reg_data   <= 8'h00;
+        end else begin
+            // Trigger CRTC register write on CPU write to 0xBCxx
+            if (cpu_wr && cpu_addr[15:8] == 8'hBC && cpu_addr[1:0] == 2'b00) begin
+                crtc_reg_wr   <= 1'b1;
+                crtc_reg_sel  <= cpu_data[3:0]; // Example: lower nibble as register index
+                crtc_reg_data <= cpu_data;      // Example: full data byte
+            end else begin
+                crtc_reg_wr <= 1'b0;
+            end
+
+            // Trigger GA40010 register write on CPU write to 0xBDxx
+            if (cpu_wr && cpu_addr[15:8] == 8'hBD && cpu_addr[1:0] == 2'b00) begin
+                ga_reg_wr   <= 1'b1;
+                ga_reg_sel  <= cpu_data[3:0]; // Example: lower nibble as register index
+                ga_reg_data <= cpu_data;      // Example: full data byte
+            end else begin
+                ga_reg_wr <= 1'b0;
+            end
+        end
+    end
+
+    // Add these parameters
+    localparam SPRITE_ATTR_BASE = 14'h0000;    // Sprite attributes start at 0x0000
+    localparam SPRITE_PATTERN_BASE = 14'h0200;  // Sprite patterns start at 0x0200
+    localparam SPRITE_ATTR_SIZE = 14'h0020;     // 32 bytes for 16 sprites
+    localparam SPRITE_PATTERN_SIZE = 14'h0100;  // 256 bytes per sprite pattern
 endmodule 

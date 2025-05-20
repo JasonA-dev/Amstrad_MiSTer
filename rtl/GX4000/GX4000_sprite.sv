@@ -32,6 +32,18 @@ module GX4000_sprite
     output [7:0]  asic_ram_din
 );
 
+// Add at the top of the module:
+reg [13:0] asic_ram_addr_reg;
+reg        asic_ram_rd_reg;
+reg        asic_ram_wr_reg;
+reg [7:0]  asic_ram_din_reg;
+
+    // Add these parameters
+    localparam SPRITE_ATTR_BASE = 14'h0000;    // Sprite attributes start at 0x0000
+    localparam SPRITE_PATTERN_BASE = 14'h0200;  // Sprite patterns start at 0x0200
+    localparam SPRITE_ATTR_SIZE = 14'h0020;     // 32 bytes for 16 sprites
+    localparam SPRITE_PATTERN_SIZE = 14'h0100;  // 256 bytes per sprite pattern
+
     // Expand to 16 sprites
     reg [7:0] sprite_x[0:15];
     reg [7:0] sprite_y[0:15];
@@ -228,22 +240,22 @@ module GX4000_sprite
         end
     end
 
-    // Create a proper address for sprite_data lookup
-    wire [13:0] full_sprite_addr = {sprite_pattern[active_sprite], sprite_line[3:0], sprite_pixel_count[3:0]};
-    wire [7:0] sprite_pixel_data = asic_ram_q;
-    
+    // Modify the sprite pattern address calculation
+    wire [13:0] full_sprite_addr = SPRITE_PATTERN_BASE + 
+        {sprite_pattern[active_sprite], sprite_line[3:0], sprite_pixel_count[3:0]};
+
     // Sprite output with effects applied
     reg [7:0] sprite_pixel_with_effects;
     
     always @(*) begin
         // Only output color if enabled and pixel data is nonzero
-        if (sprite_enable[active_sprite] && |sprite_pixel_data) begin
+        if (sprite_enable[active_sprite] && |asic_ram_q) begin
             sprite_pixel_with_effects = sprite_color[active_sprite];
         end else begin
             sprite_pixel_with_effects = 8'h00;
         end
         // Apply sprite effects if active (as before)
-        if (|sprite_pixel_data && config_sprite[0]) begin
+        if (|asic_ram_q && config_sprite[0]) begin
             case (sprite_effect[active_sprite])
                 8'h01: sprite_pixel_with_effects = sprite_color[active_sprite] | 8'h80;  // Outline
                 8'h02: sprite_pixel_with_effects = 8'h80 | {7'b0, sprite_color[active_sprite][6:0] >> 1}; // Shadow
@@ -258,10 +270,109 @@ module GX4000_sprite
     // Final sprite output
     assign collision_flags = collision_flags_reg;
 
-    // When fetching sprite data for rendering:
-    assign asic_ram_addr = full_sprite_addr;
-    assign asic_ram_rd = 1;
-    assign asic_ram_wr = 0;
-    assign asic_ram_din = 0;
+    // Add sprite download tracking
+    reg [3:0] sprite_download_id;
+    reg [7:0] sprite_download_offset;
+    reg sprite_download_active;
+    reg [1:0] download_type;  // 0=none, 1=pattern, 2=attribute
+
+
+
+// Replace the continuous assignments with:
+assign asic_ram_addr = asic_ram_addr_reg;
+assign asic_ram_rd = asic_ram_rd_reg;
+assign asic_ram_wr = asic_ram_wr_reg;
+assign asic_ram_din = asic_ram_din_reg;
+
+// Add new always block:
+always @(posedge clk_sys) begin
+    if (reset) begin
+        asic_ram_addr_reg <= 14'h0000;
+        asic_ram_rd_reg <= 1'b0;
+        asic_ram_wr_reg <= 1'b0;
+        asic_ram_din_reg <= 8'h00;
+    end else begin
+        // Default values
+        asic_ram_rd_reg <= 1'b0;
+        asic_ram_wr_reg <= 1'b0;
+
+        // Handle sprite pattern downloads
+        if (cpu_wr && (cpu_addr[15:8] == 8'h40)) begin
+            asic_ram_addr_reg <= SPRITE_PATTERN_BASE + {sprite_download_id, sprite_download_offset};
+            asic_ram_din_reg <= cpu_data;
+            asic_ram_wr_reg <= 1'b1;
+        end
+
+        // Handle sprite attribute downloads
+        if (cpu_wr && (cpu_addr[15:8] == 8'h60) && (cpu_addr[7:5] < 4'h2)) begin
+            asic_ram_addr_reg <= SPRITE_ATTR_BASE + {cpu_addr[4:0]};
+            asic_ram_din_reg <= cpu_data;
+            asic_ram_wr_reg <= 1'b1;
+        end
+
+        // Handle sprite pattern reads
+        if (sprite_active && !hblank && !vblank) begin
+            asic_ram_addr_reg <= SPRITE_PATTERN_BASE + {active_sprite, sprite_line};
+            asic_ram_rd_reg <= 1'b1;
+        end
+    end
+end
+
+    // Sprite state handling
+    always @(posedge clk_sys) begin
+        if (reset) begin
+            sprite_active <= 1'b0;
+            sprite_id <= 4'h0;
+            sprite_download_id <= 4'h0;
+            sprite_download_offset <= 8'h00;
+            sprite_download_active <= 1'b0;
+            download_type <= 2'b00;
+            asic_ram_addr_reg <= 14'h0000;
+            asic_ram_rd_reg <= 1'b0;
+            asic_ram_wr_reg <= 1'b0;
+            asic_ram_din_reg <= 8'h00;
+        end else begin
+            // Default values
+            asic_ram_rd_reg <= 1'b0;
+            asic_ram_wr_reg <= 1'b0;
+
+            // Handle sprite pattern downloads
+            if (cpu_wr && (cpu_addr[15:8] == 8'h40)) begin
+                asic_ram_addr_reg <= SPRITE_PATTERN_BASE + {sprite_download_id, sprite_download_offset};
+                asic_ram_din_reg <= cpu_data;
+                asic_ram_wr_reg <= 1'b1;
+                sprite_download_offset <= sprite_download_offset + 1'b1;
+                if (sprite_download_offset == 8'hFF) begin
+                    sprite_download_id <= sprite_download_id + 1'b1;
+                    sprite_download_offset <= 8'h00;
+                end
+            end
+
+            // Handle sprite attribute downloads
+            if (cpu_wr && (cpu_addr[15:8] == 8'h60) && (cpu_addr[7:5] < 4'h2)) begin
+                asic_ram_addr_reg <= SPRITE_ATTR_BASE + {cpu_addr[4:0]};
+                asic_ram_din_reg <= cpu_data;
+                asic_ram_wr_reg <= 1'b1;
+            end
+
+            // Handle sprite pattern reads
+            if (sprite_active && !hblank && !vblank) begin
+                asic_ram_addr_reg <= SPRITE_PATTERN_BASE + {active_sprite, sprite_line};
+                asic_ram_rd_reg <= 1'b1;
+            end
+
+            // Update sprite active state
+            if (!hblank && !vblank) begin
+                sprite_active <= (hpos >= sprite_x[active_sprite] && 
+                                hpos < (sprite_x[active_sprite] + 16) &&
+                                vpos >= sprite_y[active_sprite] && 
+                                vpos < (sprite_y[active_sprite] + 16));
+                sprite_id <= active_sprite;
+            end else begin
+                sprite_active <= 1'b0;
+                sprite_id <= 4'h0;
+            end
+        end
+    end
 
 endmodule 

@@ -81,16 +81,18 @@ module GX4000_ACID
     // 16KB ASIC RAM window (0x4000–0x7FFF)
     reg [7:0] asic_ram [0:16383];
 
-    // RAM read data
+    // ASIC RAM interface
     reg [7:0] asic_ram_data;
     reg [7:0] asic_ram_q_reg;
 
-    // RAM read/write logic
+    // Output assignment
+    assign asic_ram_q = asic_ram_q_reg;
+
+    // ASIC RAM control
     always @(posedge clk_sys) begin
         if (reset) begin
-            // Optionally clear RAM on reset
-            // integer i;
-            // for (i = 0; i < 16384; i = i + 1) asic_ram[i] <= 8'h00;
+            asic_ram_data <= 8'h00;
+            asic_ram_q_reg <= 8'h00;
         end else if (plus_mode) begin
             // Write to ASIC RAM from CPU
             if (cpu_wr && (cpu_addr >= 16'h4000) && (cpu_addr <= 16'h7FFF)) begin
@@ -106,7 +108,6 @@ module GX4000_ACID
             end
             // Read from ASIC RAM for external port
             if (asic_ram_rd) begin
-                //$display("Reading ASIC RAM at address %h", asic_ram_addr);
                 asic_ram_q_reg <= asic_ram[asic_ram_addr];
             end
         end
@@ -214,7 +215,6 @@ module GX4000_ACID
     // Output assignments
     assign asic_valid = (state == UNLOCKED || state == PERM_UNLOCKED);  // Update to include PERM_UNLOCKED
     assign asic_status = status_reg;
-    assign asic_ram_q = asic_ram_q_reg;
 
 endmodule 
 
