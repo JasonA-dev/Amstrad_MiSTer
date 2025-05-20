@@ -171,21 +171,78 @@ module GX4000_video
             b_out <= 4'h0;
         end else if (crtc_clken) begin
             if (crtc_de) begin
-                if (plus_mode && asic_enabled && asic_ram_rd) begin
-                    // Plus mode with active ASIC reads: Use palette lookup with 4-bit per channel
-                    r_out <= palette_latch_r;
-                    g_out <= palette_latch_g;
-                    b_out <= palette_latch_b;
-                    $display("ASIC mode: r_out=%h, g_out=%h, b_out=%h", palette_latch_r, palette_latch_g, palette_latch_b);
-                end else begin
-                    // Non-Plus mode or ASIC not reading: Direct 2-bit per channel from motherboard Gate Array
-                    // No palette lookup, just expand 2-bit to 4-bit
-                    r_out <= {2'b00, r_in};
-                    g_out <= {2'b00, g_in};
-                    b_out <= {2'b00, b_in};
-                    $display("Motherboard mode: r_in=%b, g_in=%b, b_in=%b, r_out=%h, g_out=%h, b_out=%h", 
-                            r_in, g_in, b_in, {2'b00, r_in}, {2'b00, g_in}, {2'b00, b_in});
-                end
+                case (config_mode)
+                    8'h00: begin
+                        // Standard CPC mode - use Gate Array colors directly
+                        r_out <= {2'b00, r_in};
+                        g_out <= {2'b00, g_in};
+                        b_out <= {2'b00, b_in};
+                        $display("Standard mode: r_in=%b, g_in=%b, b_in=%b", r_in, g_in, b_in);
+                    end
+                    default: begin
+                        if (plus_mode && asic_enabled && asic_ram_rd) begin
+                            case (asic_mode)
+                                8'h02: begin
+                                    // Mode 0x02: Standard Plus mode with palette
+                                    case (mrer_mode)
+                                        5'h01: begin
+                                            // MRER mode 0x01: Enhanced palette mode
+                                            // Use palette with additional color processing
+                                            r_out <= (palette_latch_r + r_reg_prev) >> 1;
+                                            g_out <= (palette_latch_g + g_reg_prev) >> 1;
+                                            b_out <= (palette_latch_b + b_reg_prev) >> 1;
+                                            $display("ASIC mode 0x02 with MRER 0x01: Using enhanced palette");
+                                        end
+                                        default: begin
+                                            // Standard palette mode
+                                            r_out <= palette_latch_r;
+                                            g_out <= palette_latch_g;
+                                            b_out <= palette_latch_b;
+                                            $display("ASIC mode 0x02: Using standard palette");
+                                        end
+                                    endcase
+                                end
+                                8'h62: begin
+                                    // Mode 0x62: Enhanced Plus mode with sprite priority
+                                    if (sprite_active) begin
+                                        // Sprite takes priority
+                                        r_out <= palette_latch_r;
+                                        g_out <= palette_latch_g;
+                                        b_out <= palette_latch_b;
+                                        $display("ASIC mode 0x62: Using sprite colors");
+                                    end else begin
+                                        // Use background colors
+                                        r_out <= {2'b00, r_in};
+                                        g_out <= {2'b00, g_in};
+                                        b_out <= {2'b00, b_in};
+                                        $display("ASIC mode 0x62: Using background colors");
+                                    end
+                                end
+                                8'h82: begin
+                                    // Mode 0x82: Advanced Plus mode with alpha blending
+                                    // Blend sprite and background colors
+                                    r_out <= (palette_latch_r + {2'b00, r_in}) >> 1;
+                                    g_out <= (palette_latch_g + {2'b00, g_in}) >> 1;
+                                    b_out <= (palette_latch_b + {2'b00, b_in}) >> 1;
+                                    $display("ASIC mode 0x82: Using blended colors");
+                                end
+                                default: begin
+                                    // Fallback to standard Plus mode
+                                    r_out <= palette_latch_r;
+                                    g_out <= palette_latch_g;
+                                    b_out <= palette_latch_b;
+                                    $display("Unknown ASIC mode %h: Using default palette", asic_mode);
+                                end
+                            endcase
+                        end else begin
+                            // Non-Plus mode or ASIC not reading: Direct 2-bit per channel from motherboard Gate Array
+                            r_out <= {2'b00, r_in};
+                            g_out <= {2'b00, g_in};
+                            b_out <= {2'b00, b_in};
+                            $display("Motherboard mode: r_in=%b, g_in=%b, b_in=%b", r_in, g_in, b_in);
+                        end
+                    end
+                endcase
             end else begin
                 // Blanking: Output black
                 r_out <= 4'h0;
@@ -475,6 +532,19 @@ module GX4000_video
         end else begin
             sprite_active_out <= sprite_active;
             sprite_id_out <= sprite_id;
+        end
+    end
+
+    // Store previous color values for MRER mode 0x01
+    always @(posedge clk_sys) begin
+        if (reset) begin
+            r_reg_prev <= 8'h00;
+            g_reg_prev <= 8'h00;
+            b_reg_prev <= 8'h00;
+        end else if (crtc_clken && crtc_de) begin
+            r_reg_prev <= {2'b00, r_in};
+            g_reg_prev <= {2'b00, g_in};
+            b_reg_prev <= {2'b00, b_in};
         end
     end
 

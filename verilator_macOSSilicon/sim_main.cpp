@@ -401,10 +401,10 @@ int main(int argc, char** argv, char** env) {
 				mem_edit.DrawContents(&top->top__DOT__sdram__DOT__ram[0], 8388608, 0); // 8MB
 				ImGui::EndTabItem();
 			}
-			//if (ImGui::BeginTabItem("ASIC RAM (16K)")) {
-			//	mem_edit.DrawContents(&top->top__DOT__cart_inst__DOT__acid_inst__DOT__asic_ram[0], 16384, 0); // 16K
-			//	ImGui::EndTabItem();
-			//}
+			if (ImGui::BeginTabItem("ASIC RAM (16K)")) {
+				mem_edit.DrawContents(&top->top__DOT__cart_inst__DOT__acid_inst__DOT__asic_ram[0], 16384, 0); // 16K
+				ImGui::EndTabItem();
+			}
 			ImGui::EndTabBar();
 		}
 		ImGui::End();
