@@ -518,6 +518,34 @@ PlusMode cart_inst
     .pri_irq()
 );
 
+// Add debug statements for PlusMode signals
+always @(posedge clk_48) begin
+    if (ce_pix) begin
+        /*
+        $display("[PLUS_DEBUG] Timing: cclk_en_n=%b, crtc_de=%b, plus_mode=%b", 
+                cclk_en_n, crtc_de, plus_mode);
+        $display("[PLUS_DEBUG] Video: r_in=%b, g_in=%b, b_in=%b, r_out=%h, g_out=%h, b_out=%h", 
+                r, g, b, plus_r, plus_g, plus_b);
+        $display("[PLUS_DEBUG] CRTC: ma=%h, ra=%h, de=%b, vsync=%b, hsync=%b", 
+                MA, RA, crtc_de, crtc_vs, crtc_hs);
+        */
+    end
+end
+
+// Add debug for ROM loading
+always @(posedge clk_48) begin
+    if (ioctl_download && ioctl_wr) begin
+       // $display("[PLUS_DEBUG] ROM Load: addr=%h, data=%h, index=%h", 
+       //         download_addr, ioctl_dout, ioctl_index);
+    end
+end
+
+// Add debug for cartridge interface
+always @(posedge clk_48) begin
+    if (cart_wr) begin
+        //$display("[PLUS_DEBUG] Cart Write: addr=%h, data=%h", cart_addr, cart_data);
+    end
+end
 
 // Connect motherboard outputs to intermediate signals
 wire [1:0] mb_r = r;

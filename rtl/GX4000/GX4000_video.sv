@@ -174,7 +174,6 @@ module GX4000_video
             g_out <= 4'h0;
             b_out <= 4'h0;
         end else if (crtc_clken_actual) begin
-            //$display("crtc_clken_actual=%b, crtc_de=%b, plus_mode=%b, asic_enabled=%b, asic_ram_rd=%b", crtc_clken_actual, crtc_de, plus_mode, asic_enabled, asic_ram_rd);
             if (crtc_de) begin
                 case (config_mode)
                     8'h00: begin
@@ -182,69 +181,53 @@ module GX4000_video
                         r_out <= {2'b00, r_in};
                         g_out <= {2'b00, g_in};
                         b_out <= {2'b00, b_in};
-                        $display("Standard mode: r_in=%b, g_in=%b, b_in=%b", r_in, g_in, b_in);
+                        $display("[VIDEO_DEBUG] Standard mode: r_in=%b, g_in=%b, b_in=%b", r_in, g_in, b_in);
                     end
                     default: begin
-                        if (plus_mode && asic_enabled && asic_ram_rd) begin
+                        if (plus_mode && asic_enabled) begin
                             case (asic_mode)
                                 8'h02: begin
                                     // Mode 0x02: Standard Plus mode with palette
-                                    case (mrer_mode)
-                                        5'h01: begin
-                                            // MRER mode 0x01: Enhanced palette mode
-                                            // Use palette with additional color processing
-                                            r_out <= (palette_latch_r + r_reg_prev) >> 1;
-                                            g_out <= (palette_latch_g + g_reg_prev) >> 1;
-                                            b_out <= (palette_latch_b + b_reg_prev) >> 1;
-                                            $display("ASIC mode 0x02 with MRER 0x01: Using enhanced palette");
-                                        end
-                                        default: begin
-                                            // Standard palette mode
-                                            r_out <= palette_latch_r;
-                                            g_out <= palette_latch_g;
-                                            b_out <= palette_latch_b;
-                                            $display("ASIC mode 0x02: Using standard palette");
-                                        end
-                                    endcase
+                                    r_out <= palette_latch_r;
+                                    g_out <= palette_latch_g;
+                                    b_out <= palette_latch_b;
+                                    $display("[VIDEO_DEBUG] ASIC mode 0x02: Using palette colors r=%h, g=%h, b=%h",
+                                            palette_latch_r, palette_latch_g, palette_latch_b);
                                 end
                                 8'h62: begin
                                     // Mode 0x62: Enhanced Plus mode with sprite priority
                                     if (sprite_active) begin
-                                        // Sprite takes priority
                                         r_out <= palette_latch_r;
                                         g_out <= palette_latch_g;
                                         b_out <= palette_latch_b;
-                                        $display("ASIC mode 0x62: Using sprite colors");
+                                        $display("[VIDEO_DEBUG] ASIC mode 0x62: Using sprite palette");
                                     end else begin
-                                        // Use background colors
                                         r_out <= {2'b00, r_in};
                                         g_out <= {2'b00, g_in};
                                         b_out <= {2'b00, b_in};
-                                        $display("ASIC mode 0x62: Using background colors");
+                                        $display("[VIDEO_DEBUG] ASIC mode 0x62: Using background colors");
                                     end
                                 end
                                 8'h82: begin
                                     // Mode 0x82: Advanced Plus mode with alpha blending
-                                    // Blend sprite and background colors
                                     r_out <= (palette_latch_r + {2'b00, r_in}) >> 1;
                                     g_out <= (palette_latch_g + {2'b00, g_in}) >> 1;
                                     b_out <= (palette_latch_b + {2'b00, b_in}) >> 1;
-                                    $display("ASIC mode 0x82: Using blended colors");
+                                    $display("[VIDEO_DEBUG] ASIC mode 0x82: Using blended colors");
                                 end
                                 default: begin
-                                    // Fallback to standard Plus mode
                                     r_out <= palette_latch_r;
                                     g_out <= palette_latch_g;
                                     b_out <= palette_latch_b;
-                                    $display("Unknown ASIC mode %h: Using default palette", asic_mode);
+                                    $display("[VIDEO_DEBUG] Unknown ASIC mode %h: Using default palette", asic_mode);
                                 end
                             endcase
                         end else begin
-                            // Non-Plus mode or ASIC not reading: Direct 2-bit per channel from motherboard Gate Array
+                            // Non-Plus mode or ASIC not enabled: Direct 2-bit per channel
                             r_out <= {2'b00, r_in};
                             g_out <= {2'b00, g_in};
                             b_out <= {2'b00, b_in};
-                            $display("Motherboard mode: r_in=%b, g_in=%b, b_in=%b", r_in, g_in, b_in);
+                            $display("[VIDEO_DEBUG] Motherboard mode: r_in=%b, g_in=%b, b_in=%b", r_in, g_in, b_in);
                         end
                     end
                 endcase
@@ -255,13 +238,6 @@ module GX4000_video
                 b_out <= 4'h0;
             end
         end
-        /*
-        else begin
-            r_out <= {2'b00, r_in};
-            g_out <= {2'b00, g_in};
-            b_out <= {2'b00, b_in};
-        end
-        */
     end
             
     // Initialize registers
@@ -375,14 +351,25 @@ module GX4000_video
             palette_latch_g <= 4'h0;
             palette_latch_b <= 4'h0;
         end else if (crtc_clken_actual) begin
-            if (crtc_de && plus_mode) begin
-                // In Plus mode, use ASIC RAM data for palette lookup
-                // The address is based on the current mode and position
+            if (crtc_de) begin  // Remove plus_mode check to allow palette access in all modes
+                // Calculate palette pointer based on current position
                 palette_pointer <= {crtc_ra[2:0], crtc_ma[1:0]};
-                // Use the correct bits from ASIC RAM for each color channel
-                palette_latch_r <= {2'b00, asic_ram_q[1:0]};  // Red bits
-                palette_latch_g <= {2'b00, asic_ram_q[3:2]};  // Green bits
-                palette_latch_b <= {2'b00, asic_ram_q[5:4]};  // Blue bits
+                
+                if (plus_mode && asic_enabled) begin
+                    // Plus mode with ASIC enabled: Use ASIC RAM data
+                    palette_latch_r <= {2'b00, asic_ram_q[1:0]};
+                    palette_latch_g <= {2'b00, asic_ram_q[3:2]};
+                    palette_latch_b <= {2'b00, asic_ram_q[5:4]};
+                    $display("[VIDEO_DEBUG] Plus mode palette: pointer=%h, data=%h, r=%h, g=%h, b=%h",
+                            palette_pointer, asic_ram_q, palette_latch_r, palette_latch_g, palette_latch_b);
+                end else begin
+                    // Motherboard mode or ASIC disabled: Use direct color mapping
+                    palette_latch_r <= {2'b00, r_in};
+                    palette_latch_g <= {2'b00, g_in};
+                    palette_latch_b <= {2'b00, b_in};
+                    $display("[VIDEO_DEBUG] Motherboard mode palette: r_in=%b, g_in=%b, b_in=%b",
+                            r_in, g_in, b_in);
+                end
             end
         end
     end
@@ -443,21 +430,57 @@ module GX4000_video
     assign asic_ram_rd_en = crtc_clken_actual && crtc_de && asic_enabled;  // Only enable reads when ASIC is enabled
     assign asic_ram_wr_en = asic_enabled && cpu_wr && (cpu_addr[15:8] == 8'hBC);
     
+    // Debug output for CRTC timing
+    always @(posedge clk_sys) begin
+        if (crtc_clken_actual) begin
+           // $display("[VIDEO_DEBUG] CRTC timing: ma=%h, ra=%h, de=%b, vsync=%b, hsync=%b", 
+           //         crtc_ma, crtc_ra, crtc_de, crtc_vsync, crtc_hsync);
+        end
+    end
+
     // Debug output for ASIC RAM read conditions
     always @(posedge clk_sys) begin
         if (crtc_clken_actual) begin
             if (crtc_de) begin
-                //$display("ASIC RAM read conditions: crtc_clken=%b, crtc_de=%b, asic_enabled=%b, plus_mode=%b, ma=%h, ra=%h", 
-                //        crtc_clken_actual, crtc_de, asic_enabled, plus_mode, crtc_ma, crtc_ra);
+                /*
+                $display("[VIDEO_DEBUG] ASIC RAM read conditions: crtc_clken=%b, crtc_de=%b, asic_enabled=%b, plus_mode=%b, ma=%h, ra=%h", 
+                        crtc_clken_actual, crtc_de, asic_enabled, plus_mode, crtc_ma, crtc_ra);
+                $display("[VIDEO_DEBUG] ASIC mode=%h, asic_ram_rd=%b, asic_ram_addr=%h", 
+                        asic_mode, asic_ram_rd, asic_ram_addr);
+                $display("[VIDEO_DEBUG] Video output: r_out=%h, g_out=%h, b_out=%h", 
+                        r_out, g_out, b_out);
+                $display("[VIDEO_DEBUG] ASIC RAM data: q=%h", asic_ram_q);
+                */
             end
         end
     end
 
-    // Debug output for actual ASIC RAM reads
+    // Debug output for palette access
     always @(posedge clk_sys) begin
-        if (asic_ram_rd) begin
-            //$display("ASIC RAM read: addr=%h, data=%h, sprite_active=%b", 
-            //        asic_ram_addr, asic_ram_q, sprite_active_wire);
+        if (crtc_clken_actual && crtc_de && plus_mode) begin
+            $display("[VIDEO_DEBUG] Palette access: pointer=%h, addr=%h, data=%h", 
+                    palette_pointer, asic_ram_addr, asic_ram_q);
+            $display("[VIDEO_DEBUG] Palette colors: r=%h, g=%h, b=%h", 
+                    palette_latch_r, palette_latch_g, palette_latch_b);
+            $display("[VIDEO_DEBUG] Input colors: r_in=%b, g_in=%b, b_in=%b", 
+                    r_in, g_in, b_in);
+        end
+    end
+
+    // Debug output for mode changes
+    always @(posedge clk_sys) begin
+        if (cpu_wr && cpu_addr[15:8] == 8'hBC) begin
+            if (cpu_addr[0] == 0) begin
+                case (cpu_data[4:0])
+                    5'h00: $display("[VIDEO_DEBUG] Config mode changed to %h", cpu_data);
+                    5'h01: $display("[VIDEO_DEBUG] MRER mode changed to %h", cpu_data[4:0]);
+                    5'h02: begin
+                        $display("[VIDEO_DEBUG] ASIC mode changed to %h, plus_mode=%b", cpu_data, plus_mode);
+                        $display("[VIDEO_DEBUG] ASIC enabled will be: %b", ((cpu_data == 8'h02) || (cpu_data == 8'h62) || (cpu_data == 8'h82)) && plus_mode);
+                        $display("[VIDEO_DEBUG] Current ASIC state: mode=%h, enabled=%b", asic_mode, asic_enabled);
+                    end
+                endcase
+            end
         end
     end
 
