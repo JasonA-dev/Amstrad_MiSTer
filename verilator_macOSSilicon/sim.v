@@ -467,6 +467,18 @@ PlusMode cart_inst
     .g_out(plus_g),
     .b_out(plus_b),
     
+    // CRTC interface from motherboard
+    .cclk_en_n(cclk_en_n),     // Connect Gate Array clock enable
+    .crtc_clken(cclk_en_n),    // Keep for backward compatibility
+    .crtc_nclken(cclk_en_p),
+    .crtc_ma(MA),
+    .crtc_ra(RA),
+    .crtc_de(crtc_de),
+    .crtc_field(field),
+    .crtc_cursor(cursor),
+    .crtc_vsync(crtc_vs),
+    .crtc_hsync(crtc_hs),
+    
     // Audio interface
     .cpc_audio_l(audio_l),
     .cpc_audio_r(audio_r),
@@ -502,7 +514,8 @@ PlusMode cart_inst
     .audio_status(),
     
     // Plus-specific outputs
-    .plus_bios_valid(plus_valid)
+    .plus_bios_valid(plus_valid),
+    .pri_irq()
 );
 
 
@@ -594,6 +607,25 @@ mock_sdram sdram
     .tape_rd_ack()
 );
 
+// CRTC interface signals
+wire [13:0] MA;
+wire [4:0] RA;
+wire crtc_de;
+wire crtc_vs;
+wire crtc_hs;
+wire field;
+wire cursor;
+wire cclk_en_n;
+wire cclk_en_p;
 
+// Connect CRTC signals from motherboard
+assign MA = motherboard.MA;
+assign RA = motherboard.RA;
+assign crtc_de = motherboard.crtc_de;
+assign crtc_vs = motherboard.crtc_vs;
+assign crtc_hs = motherboard.crtc_hs;
+assign field = motherboard.field;
+assign cclk_en_n = motherboard.cclk_en_n;
+assign cclk_en_p = motherboard.cclk_en_p;
 
 endmodule

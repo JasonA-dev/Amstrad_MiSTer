@@ -391,4 +391,18 @@ T80pa CPU
 );
 `endif
 
+// Remove the video module instance and keep only the necessary signals
+wire [3:0] red_out, green_out, blue_out;
+wire sprite_active;
+wire [3:0] sprite_id;
+wire [7:0] collision_reg;
+wire pri_irq;
+
+// ASIC RAM interface signals
+wire [13:0] asic_ram_addr;
+wire        asic_ram_rd;
+wire [7:0]  asic_ram_q;
+wire        asic_ram_wr;
+wire [7:0]  asic_ram_din;
+
 endmodule

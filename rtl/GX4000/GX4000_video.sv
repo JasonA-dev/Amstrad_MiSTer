@@ -5,7 +5,8 @@ module GX4000_video
     input         plus_mode,
     
     // CRTC Interface
-    input         crtc_clken,
+    input         cclk_en_n,     // Add Gate Array clock enable
+    input         crtc_clken,    // Keep for backward compatibility
     input         crtc_nclken,
     input  [13:0] crtc_ma,
     input   [4:0] crtc_ra,
@@ -163,13 +164,17 @@ module GX4000_video
         end
     end
 
+    // Use Gate Array clock enable for timing
+    wire crtc_clken_actual = cclk_en_n;
+
     // Video output generation
     always @(posedge clk_sys) begin
         if (reset) begin
             r_out <= 4'h0;
             g_out <= 4'h0;
             b_out <= 4'h0;
-        end else if (crtc_clken) begin
+        end else if (crtc_clken_actual) begin
+            //$display("crtc_clken_actual=%b, crtc_de=%b, plus_mode=%b, asic_enabled=%b, asic_ram_rd=%b", crtc_clken_actual, crtc_de, plus_mode, asic_enabled, asic_ram_rd);
             if (crtc_de) begin
                 case (config_mode)
                     8'h00: begin
@@ -250,6 +255,13 @@ module GX4000_video
                 b_out <= 4'h0;
             end
         end
+        /*
+        else begin
+            r_out <= {2'b00, r_in};
+            g_out <= {2'b00, g_in};
+            b_out <= {2'b00, b_in};
+        end
+        */
     end
             
     // Initialize registers
@@ -316,7 +328,7 @@ module GX4000_video
             split_addr_sync <= 16'h0000;
             pri_line_sync <= 8'h00;
             pri_control_sync <= 8'h00;
-        end else if (crtc_clken) begin
+        end else if (crtc_clken_actual) begin
             scroll_control_sync <= scroll_control;
             split_line_sync <= split_line;
             split_addr_sync <= split_addr;
@@ -337,18 +349,18 @@ module GX4000_video
                 case (cpu_data[4:0])
                     5'h00: begin
                         config_mode <= cpu_data;
-                        $display("Config mode set to %h", cpu_data);
+                        //$display("Config mode set to %h", cpu_data);
                     end
                     5'h01: begin
                         mrer_mode <= cpu_data[4:0];
-                        $display("MRER mode set to %h", cpu_data[4:0]);
+                        //$display("MRER mode set to %h", cpu_data[4:0]);
                     end
                     5'h02: begin
                         asic_mode <= cpu_data;
                         // Enable ASIC in Plus mode for modes 0x02, 0x62, and 0x82
                         asic_enabled <= ((cpu_data == 8'h02) || (cpu_data == 8'h62) || (cpu_data == 8'h82)) && plus_mode;
-                        $display("ASIC mode set to %h, enabled=%b, plus_mode=%b", 
-                                cpu_data, asic_enabled, plus_mode);
+                        //$display("ASIC mode set to %h, enabled=%b, plus_mode=%b", 
+                        //        cpu_data, asic_enabled, plus_mode);
                     end
                 endcase
             end
@@ -362,7 +374,7 @@ module GX4000_video
             palette_latch_r <= 4'h0;
             palette_latch_g <= 4'h0;
             palette_latch_b <= 4'h0;
-        end else if (crtc_clken) begin
+        end else if (crtc_clken_actual) begin
             if (crtc_de && plus_mode) begin
                 // In Plus mode, use ASIC RAM data for palette lookup
                 // The address is based on the current mode and position
@@ -383,7 +395,7 @@ module GX4000_video
             sprite_active_out <= 1'b0;
             sprite_id_out <= 4'h0;
             collision_reg <= 8'h00;
-        end else if (crtc_clken) begin
+        end else if (crtc_clken_actual) begin
             if (crtc_de) begin
                 // Check for sprite collision and update status
                 sprite_active <= (crtc_ma[13:10] == 4'hF);
@@ -405,7 +417,7 @@ module GX4000_video
         if (reset) begin
             pri_irq <= 1'b0;
             pri_count <= 8'h00;
-        end else if (crtc_clken) begin
+        end else if (crtc_clken_actual) begin
             if (crtc_de && pri_control[0]) begin
                 if (pri_count == pri_line) begin
                     pri_irq <= 1'b1;
@@ -428,15 +440,15 @@ module GX4000_video
     assign sprite_active_wire = sprite_active;
     
     // ASIC RAM control logic
-    assign asic_ram_rd_en = crtc_clken && crtc_de && asic_enabled;  // Only enable reads when ASIC is enabled
+    assign asic_ram_rd_en = crtc_clken_actual && crtc_de && asic_enabled;  // Only enable reads when ASIC is enabled
     assign asic_ram_wr_en = asic_enabled && cpu_wr && (cpu_addr[15:8] == 8'hBC);
     
     // Debug output for ASIC RAM read conditions
     always @(posedge clk_sys) begin
-        if (crtc_clken) begin
+        if (crtc_clken_actual) begin
             if (crtc_de) begin
-                $display("ASIC RAM read conditions: crtc_clken=%b, crtc_de=%b, asic_enabled=%b, plus_mode=%b, ma=%h, ra=%h", 
-                        crtc_clken, crtc_de, asic_enabled, plus_mode, crtc_ma, crtc_ra);
+                //$display("ASIC RAM read conditions: crtc_clken=%b, crtc_de=%b, asic_enabled=%b, plus_mode=%b, ma=%h, ra=%h", 
+                //        crtc_clken_actual, crtc_de, asic_enabled, plus_mode, crtc_ma, crtc_ra);
             end
         end
     end
@@ -444,8 +456,8 @@ module GX4000_video
     // Debug output for actual ASIC RAM reads
     always @(posedge clk_sys) begin
         if (asic_ram_rd) begin
-            $display("ASIC RAM read: addr=%h, data=%h, sprite_active=%b", 
-                    asic_ram_addr, asic_ram_q, sprite_active_wire);
+            //$display("ASIC RAM read: addr=%h, data=%h, sprite_active=%b", 
+            //        asic_ram_addr, asic_ram_q, sprite_active_wire);
         end
     end
 
@@ -470,7 +482,7 @@ module GX4000_video
             vsync_filtered <= 1'b0;
             hblank_filtered <= 1'b0;
             vblank_filtered <= 1'b0;
-        end else if (crtc_clken) begin
+        end else if (crtc_clken_actual) begin
             if (asic_enabled) begin
                 // Plus mode: Use ASIC sync timing
                 sync_filter <= 1'b1;
@@ -541,7 +553,7 @@ module GX4000_video
             r_reg_prev <= 8'h00;
             g_reg_prev <= 8'h00;
             b_reg_prev <= 8'h00;
-        end else if (crtc_clken && crtc_de) begin
+        end else if (crtc_clken_actual && crtc_de) begin
             r_reg_prev <= {2'b00, r_in};
             g_reg_prev <= {2'b00, g_in};
             b_reg_prev <= {2'b00, b_in};

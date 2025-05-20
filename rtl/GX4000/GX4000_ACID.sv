@@ -106,7 +106,7 @@ module GX4000_ACID
             end
             // Read from ASIC RAM for external port
             if (asic_ram_rd) begin
-                $display("Reading ASIC RAM at address %h", asic_ram_addr);
+                //$display("Reading ASIC RAM at address %h", asic_ram_addr);
                 asic_ram_q_reg <= asic_ram[asic_ram_addr];
             end
         end

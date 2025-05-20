@@ -24,7 +24,8 @@ module PlusMode
     output  [3:0] b_out,
     
     // CRTC interface from motherboard
-    input         crtc_clken,
+    input         cclk_en_n,     // Add Gate Array clock enable
+    input         crtc_clken,    // Keep for backward compatibility
     input         crtc_nclken,
     input  [13:0] crtc_ma,
     input   [4:0] crtc_ra,
@@ -114,6 +115,9 @@ module PlusMode
     wire [7:0]  asic_ram_din;
     wire [7:0]  asic_ram_q;
     
+    // Use Gate Array clock enable for timing
+    wire crtc_clken_actual = cclk_en_n;
+
     // Assign cartridge outputs
     assign cart_addr = cart_addr_int;
     assign cart_data = cart_data_int;
@@ -167,7 +171,8 @@ module PlusMode
         .cpu_rd(cpu_rd),
         
         // CRTC Interface
-        .crtc_clken(crtc_clken),
+        .cclk_en_n(cclk_en_n),     // Pass Gate Array clock enable
+        .crtc_clken(crtc_clken_actual),  // Use actual clock enable
         .crtc_nclken(crtc_nclken),
         .crtc_ma(crtc_ma),
         .crtc_ra(crtc_ra),
