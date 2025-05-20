@@ -18,18 +18,6 @@ module GX4000_ACID
     input   [7:0] audio_status,      // Audio status register
     input   [7:0] video_status,      // Video status register
     
-    // I/O hardware inputs
-    input   [7:0] joy1_data,         // Joystick 1 data
-    input   [7:0] joy2_data,         // Joystick 2 data
-    input         joy_swap,          // Joystick swap flag
-    input   [7:0] io_status,         // I/O status register
-    input   [7:0] io_control,        // I/O control register
-    input   [7:0] io_data,           // I/O data register
-    input   [7:0] io_direction,      // I/O direction register
-    input   [7:0] io_interrupt,      // I/O interrupt register
-    input   [7:0] io_timer,          // I/O timer register
-    input   [7:0] io_clock,          // I/O clock register
-    
     // ASIC RAM public interface
     input  [13:0] asic_ram_addr,
     input         asic_ram_rd,
@@ -89,8 +77,6 @@ module GX4000_ACID
     // Read logic - using continuous assignment instead of procedural
     reg [7:0] asic_register;
     reg [7:0] register_index;
-    reg [7:0] io_register;
-    reg [7:0] io_register_index;
 
     // 16KB ASIC RAM window (0x4000–0x7FFF)
     reg [7:0] asic_ram [0:16383];
@@ -108,7 +94,6 @@ module GX4000_ACID
         end else if (plus_mode) begin
             // Write to ASIC RAM from CPU
             if (cpu_wr && (cpu_addr >= 16'h4000) && (cpu_addr <= 16'h7FFF)) begin
-                $display("[ACID] 22 ASIC RAM Write: addr=%h data=%h", cpu_addr, cpu_data_in);
                 asic_ram[cpu_addr - 16'h4000] <= cpu_data_in;
             end
             // Write to ASIC RAM from external port
@@ -121,6 +106,7 @@ module GX4000_ACID
             end
             // Read from ASIC RAM for external port
             if (asic_ram_rd) begin
+                $display("Reading ASIC RAM at address %h", asic_ram_addr);
                 asic_ram_q_reg <= asic_ram[asic_ram_addr];
             end
         end
@@ -150,32 +136,6 @@ module GX4000_ACID
         end
     end
 
-    // Sequential register reading for I/O port range (0x7F00-0x7FFF)
-    always @(posedge clk_sys) begin
-        if (reset) begin
-            io_register_index <= 8'h00;
-            io_register <= 8'h00;
-        end else if (plus_mode && cpu_rd && (cpu_addr >= 16'h7F00) && (cpu_addr <= 16'h7FFF)) begin
-            // Increment register index on each read
-            io_register_index <= io_register_index + 1'd1;
-            
-            // Return different register values based on index
-            case (io_register_index)
-                8'h00: io_register <= joy1_data;        // Joystick 1 data
-                8'h01: io_register <= joy2_data;        // Joystick 2 data
-                8'h02: io_register <= {7'h00, joy_swap};// Joystick swap flag
-                8'h03: io_register <= io_status;        // I/O status register
-                8'h04: io_register <= io_control;       // I/O control register
-                8'h05: io_register <= io_data;          // I/O data register
-                8'h06: io_register <= io_direction;     // I/O direction register
-                8'h07: io_register <= io_interrupt;     // I/O interrupt register
-                8'h08: io_register <= io_timer;         // I/O timer register
-                8'h09: io_register <= io_clock;         // I/O clock register
-                default: io_register <= 8'h00;          // Return 0 for other reads
-            endcase
-        end
-    end
-
     // Reset logic
     always_ff @(posedge clk_sys) begin
         if (reset) begin
@@ -189,7 +149,6 @@ module GX4000_ACID
             last_cpu_rd <= 1'b0;
             last_cpu_data_in <= 8'h00;
             last_cpu_addr <= 16'h0000;
-            //$display("[ACID] Reset - State: LOCKED, Next byte: %h", UNLOCK_SEQ[0]);
         end
         else if (plus_mode) begin
             // Store last CPU signals for edge detection
@@ -208,8 +167,6 @@ module GX4000_ACID
                         status_reg <= UNLOCK_SEQ[0];
                         next_byte <= UNLOCK_SEQ[0];
                         attempt_count <= attempt_count + 1'd1;
-                        $display("[ACID] Starting unlock sequence - Attempt %d, Register BC%02X", 
-                                attempt_count + 1, cpu_addr[7:0]);
                     end
 
                     UNLOCKING: begin
@@ -222,7 +179,6 @@ module GX4000_ACID
                                 seq_index <= seq_index + 1'd1;
                                 status_reg <= UNLOCK_SEQ[16];
                                 next_byte <= UNLOCK_SEQ[16];
-                                $display("[ACID] UNLOCKED! STATE byte (0xCD) read correctly from BC%02X", cpu_addr[7:0]);
                             end
                             else begin
                                 seq_index <= seq_index + 1'd1;
@@ -236,8 +192,6 @@ module GX4000_ACID
                             seq_index <= '0;
                             status_reg <= UNLOCK_SEQ[0];
                             next_byte <= UNLOCK_SEQ[0];
-                            $display("[ACID] Wrong byte %h read from BC%02X, expected %h - Resetting sequence", 
-                                    next_byte, cpu_addr[7:0], UNLOCK_SEQ[seq_index]);
                         end
                     end
 
@@ -248,78 +202,14 @@ module GX4000_ACID
                     default: state <= LOCKED;
                 endcase
             end
-            
-            // Debug write operations - detect rising edge of write
-            if (cpu_wr && !last_cpu_wr && cpu_addr[15:8] == 8'hBC) begin
-                if (state == PERM_UNLOCKED) begin
-                    // Ignore all writes, stay permanently unlocked
-                end else begin
-                    // Accept both per-address, fixed-address, and BC10-only unlock sequences
-                    if (state == LOCKED && seq_index == 0) begin
-                        unlock_addr <= cpu_addr[7:0];
-                    end
-                    // Check if this is part of the unlock sequence
-                    if (
-                        (cpu_addr[7:0] == cpu_data_in) || // per-address
-                        (cpu_addr[7:0] == unlock_addr && cpu_data_in == UNLOCK_SEQ[seq_index]) || // fixed-address
-                        (cpu_addr[7:0] == 8'h00 && cpu_data_in == UNLOCK_SEQ[seq_index]) || // BC00-only
-                        (cpu_addr[7:0] == 8'h10 && cpu_data_in == UNLOCK_SEQ[seq_index])    // BC10-only edge case
-                    ) begin
-                        $display("[ACID] Unlock write: BC%02X = %h (matches address or fixed or BC10-only)", 
-                                cpu_addr[7:0], cpu_data_in);
-                        // Process as part of unlock sequence
-                        case (state)
-                            LOCKED: begin
-                                if (cpu_data_in == UNLOCK_SEQ[0]) begin
-                                    state <= UNLOCKING;
-                                    seq_index <= 1;
-                                    received_seq[0] <= cpu_data_in;
-                                    $display("[ACID] Unlock started (fixed, per-address, or BC10-only)");
-                                end
-                            end
-                            UNLOCKING: begin
-                                if (cpu_data_in == UNLOCK_SEQ[seq_index]) begin
-                                    received_seq[seq_index] <= cpu_data_in;
-                                    if ((seq_index == 14 || seq_index == 15)) begin
-                                        // STATE byte received - unlock ASIC (support both 15 and 16 byte sequences)
-                                        state <= PERM_UNLOCKED;
-                                        status_reg <= 8'h00; // Signal unlocked to CPU
-                                        next_byte <= 8'h00; // Signal unlocked to CPU
-                                        $display("[ACID] UNLOCKED! Complete sequence received (at step %0d)", seq_index);
-                                    end else begin
-                                        seq_index <= seq_index + 1'd1;
-                                    end
-                                end else begin
-                                    // Wrong value, reset
-                                    $display("[ACID] Unlock failed at step %0d: got %h, expected %h", seq_index, cpu_data_in, UNLOCK_SEQ[seq_index]);
-                                    state <= LOCKED;
-                                    seq_index <= 0;
-                                end
-                            end
-                            default: ;
-                        endcase
-                    end else begin
-                        $display("[ACID] Write to BC%02X: Data=%h, Status=%h, State=%s, Step=%d", 
-                                cpu_addr[7:0],
-                                cpu_data_in,
-                                status_reg, 
-                                state.name(),
-                                seq_index);
-                        // Not part of unlock sequence, reset
-                        state <= LOCKED;
-                        seq_index <= 0;
-                    end
-                end
-            end
         end
     end
 
     // Output assignment based on address range
     assign cpu_data_out = 
         (cpu_addr >= 16'h4000 && cpu_addr <= 16'h7FFF) ? asic_ram_data :
-        ((cpu_addr >= 16'h7F00 && cpu_addr <= 16'h7FFF) || (cpu_addr >= 16'hDF00 && cpu_addr <= 16'hDFFF)) ? io_register :
         (cpu_addr[15:8] == 8'hBC) ? next_byte :
-        8'h00;
+        8'hFF; // Return 0xFF for all undocumented/test registers, as in MAME
 
     // Output assignments
     assign asic_valid = (state == UNLOCKED || state == PERM_UNLOCKED);  // Update to include PERM_UNLOCKED

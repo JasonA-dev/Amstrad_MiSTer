@@ -23,6 +23,24 @@ module PlusMode
     output  [3:0] g_out,
     output  [3:0] b_out,
     
+    // CRTC interface from motherboard
+    input         crtc_clken,
+    input         crtc_nclken,
+    input  [13:0] crtc_ma,
+    input   [4:0] crtc_ra,
+    input         crtc_de,
+    input         crtc_field,
+    input         crtc_cursor,
+    input         crtc_vsync,
+    input         crtc_hsync,
+    
+    // CRTC register write interface to motherboard
+    output        crtc_enable,
+    output        crtc_cs_n,
+    output        crtc_r_nw,
+    output        crtc_rs,
+    output  [7:0] crtc_data,
+    
     // Audio interface
     input   [7:0] cpc_audio_l,
     input   [7:0] cpc_audio_r,
@@ -58,7 +76,8 @@ module PlusMode
     output  [7:0] audio_status,
     
     // Plus-specific outputs
-    output        plus_bios_valid
+    output        plus_bios_valid,
+    output        pri_irq
 );
 
     // Internal signals
@@ -72,6 +91,15 @@ module PlusMode
     wire [15:0] boot_addr;
     wire [15:0] plus_bios_checksum;
     wire [7:0]  plus_bios_version;
+    
+    // I/O signals
+    wire [7:0] io_status;
+    wire [7:0] io_control;
+    wire [7:0] io_data;
+    wire [7:0] io_direction;
+    wire [7:0] io_interrupt;
+    wire [7:0] io_timer;
+    wire [7:0] io_clock;
     
     // Cartridge interface signals
     wire [24:0] cart_addr_int;  // Internal cartridge address
@@ -102,14 +130,27 @@ module PlusMode
         .clk_sys(clk_sys),
         .reset(reset),
         .plus_mode(plus_mode),
+        
+        // CPU interface
         .cpu_addr(cpu_addr),
-        .cpu_data(cpu_data_in),  // Use cpu_data_in
+        .cpu_data(cpu_data_in),
         .cpu_wr(cpu_wr),
         .cpu_rd(cpu_rd),
         .io_dout(io_dout),
+        
+        // Joystick interface
         .joy1(joy1),
         .joy2(joy2),
-        .joy_swap(joy_swap)
+        .joy_swap(joy_swap),
+        
+        // IO register outputs
+        .io_status(io_status),
+        .io_control(io_control),
+        .io_data(io_data),
+        .io_direction(io_direction),
+        .io_interrupt(io_interrupt),
+        .io_timer(io_timer),
+        .io_clock(io_clock)
     );
 
     // Video module instance (with integrated sprite handling)
@@ -117,21 +158,33 @@ module PlusMode
     (
         .clk_sys(clk_sys),
         .reset(reset),
-        .plus_mode(plus_mode),
+        .plus_mode(plus_mode & use_asic),
         
         // CPU interface
         .cpu_addr(cpu_addr),
-        .cpu_data(cpu_data_in),  // Use cpu_data_in
+        .cpu_data(cpu_data_in),
         .cpu_wr(cpu_wr),
         .cpu_rd(cpu_rd),
+        
+        // CRTC Interface
+        .crtc_clken(crtc_clken),
+        .crtc_nclken(crtc_nclken),
+        .crtc_ma(crtc_ma),
+        .crtc_ra(crtc_ra),
+        .crtc_de(crtc_de),
+        .crtc_field(crtc_field),
+        .crtc_cursor(crtc_cursor),
+        .crtc_vsync(crtc_vsync),
+        .crtc_hsync(crtc_hsync),
         
         // Video input
         .r_in(r_in),
         .g_in(g_in),
         .b_in(b_in),
+        .hpos(crtc_ma[9:0]),
+        .vpos(crtc_ra),
         .hblank(hblank),
         .vblank(vblank),
-        .hsync(hsync),         // Added hsync input
         
         // Video output
         .r_out(r_out),
@@ -139,23 +192,23 @@ module PlusMode
         .b_out(b_out),
         
         // Sprite interface outputs (for audio module)
-        .sprite_active(sprite_active),
-        .sprite_id(sprite_id),
+        .sprite_active_out(sprite_active),
+        .sprite_id_out(sprite_id),
         .collision_reg(collision_reg),
+        
         // ASIC RAM interface
         .asic_ram_addr(asic_ram_addr),
         .asic_ram_rd(asic_ram_rd),
+        .asic_ram_q(asic_ram_q),
         .asic_ram_wr(asic_ram_wr),
         .asic_ram_din(asic_ram_din),
-        .asic_ram_q(asic_ram_q)
+        
+        // Interrupt output
+        .pri_irq(pri_irq)
     );
 
-    // CRTC write handling
-    wire crtc_write = cpu_wr && cpu_addr[15:8] == 8'hBC && cpu_data_in > 8'h10;  // Use cpu_data_in
-    wire crtc_read = cpu_rd && cpu_addr[15:8] == 8'hBC;
-
     // ACID module instance
-    wire [7:0] acid_data_out;  // Add wire for ACID data output
+    wire [7:0] acid_data_out;
     GX4000_ACID acid_inst
     (
         .clk_sys(clk_sys),
@@ -164,10 +217,10 @@ module PlusMode
         
         // CPU interface
         .cpu_addr(cpu_addr),
-        .cpu_data_in(cpu_data_in),  // Use cpu_data_in
-        .cpu_wr(cpu_wr),  // Don't process CRTC writes in ACID
-        .cpu_rd(cpu_rd),   // Don't process CRTC reads in ACID
-        .cpu_data_out(acid_data_out),  // Connect ACID data output
+        .cpu_data_in(cpu_data_in),
+        .cpu_wr(cpu_wr),
+        .cpu_rd(cpu_rd),
+        .cpu_data_out(acid_data_out),
         
         // Hardware register inputs
         .sprite_control(sprite_id),           // Connect sprite ID as control
@@ -175,18 +228,6 @@ module PlusMode
         .audio_control(audio_status),         // Connect audio status as control
         .audio_status(audio_status),          // Connect audio status
         .video_status({6'b000000, sprite_active, 1'b0}), // Video status with sprite active bit
-        
-        // I/O hardware inputs
-        .joy1_data(joy1),               // Connect joystick 1 data
-        .joy2_data(joy2),               // Connect joystick 2 data
-        .joy_swap(joy_swap),             // Connect joystick swap flag
-        .io_status(8'h00),                   // I/O status (to be implemented)
-        .io_control(8'h00),                  // I/O control (to be implemented)
-        .io_data(8'h00),                     // I/O data (to be implemented)
-        .io_direction(8'h00),                // I/O direction (to be implemented)
-        .io_interrupt(8'h00),                // I/O interrupt (to be implemented)
-        .io_timer(8'h00),                    // I/O timer (to be implemented)
-        .io_clock(8'h00),                    // I/O clock (to be implemented)
         
         // ASIC RAM interface
         .asic_ram_addr(asic_ram_addr),
@@ -219,10 +260,7 @@ module PlusMode
         .vblank(vblank),
         .audio_l(audio_l),
         .audio_r(audio_r),
-        .audio_status(audio_status),
-        .sample_wr(1'b0),                     // Not used in simulation
-        .sample_addr(16'h0000),               // Not used in simulation
-        .sample_data(8'h00)                   // Not used in simulation
+        .audio_status(audio_status)
     );
 
     // Cartridge module instance
@@ -259,15 +297,22 @@ module PlusMode
         // Plus ROM validation outputs
         .plus_bios_valid(plus_bios_valid),
         .plus_bios_checksum(plus_bios_checksum),
-        .plus_bios_version(plus_bios_version)
+        .plus_bios_version(plus_bios_version),
+        
+        // ROM information outputs
+        .rom_type(rom_type),
+        .rom_size(rom_size),
+        .rom_checksum(rom_checksum),
+        .rom_version(rom_version),
+        .rom_date(rom_date),
+        .rom_title(rom_title)
     );
 
-    // Connect ACID data to CPU data bus when reading from BC00
-    wire acid_read = cpu_rd && cpu_addr == 16'hBC00 && plus_mode && use_asic;
-    wire [7:0] acid_data = acid_read ? acid_data_out : 8'h00;
-
     // Connect data sources to CPU data bus
-    assign cpu_data_out = acid_read ? acid_data : 8'h00;  // Drive output with ACID data when reading from BC00
+    assign cpu_data_out = 
+        (cpu_addr[15:8] == 8'h7F || cpu_addr[15:8] == 8'hDF) ? io_dout :
+        (cpu_addr[15:8] == 8'hBC) ? acid_data_out :
+        8'hFF;
 
     // Define ASIC page enabled signal
     wire asic_page_enabled = plus_mode && use_asic && (cpu_addr >= 16'h4000) && (cpu_addr <= 16'h7FFF);

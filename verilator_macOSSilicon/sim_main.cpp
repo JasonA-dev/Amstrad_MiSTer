@@ -276,7 +276,7 @@ int main(int argc, char** argv, char** env) {
 	//bus.QueueDownload("./diagnostics.rom", 0, true);
 	//bus.QueueDownload("./CPC_PLUS.CPR", 5, true);
 
-	//bus.QueueDownload("./cpr/Barbarian II (1990)(Ocean).CPR", 5, true);	   		  // video + text
+	bus.QueueDownload("./cpr/Barbarian II (1990)(Ocean).CPR", 5, true);	   		  // video + text
 	//bus.QueueDownload("./cpr/Batman the Movie (1990)(Ocean).CPR", 5, true);	  	  // black border, no protection detected
 	//bus.QueueDownload("./cpr/Batman the Movie (1990)(Ocean)[a].CPR", 5, true);  	  // black border, no protection detected
 	
@@ -286,7 +286,7 @@ int main(int argc, char** argv, char** env) {
 	//bus.QueueDownload("./cpr/Crazy Cars 2 (1990)(Titus)[a].CPR", 5, true);  		  // black screen, no protection detected, sprite data downloading
 	//bus.QueueDownload("./cpr/Dick Tracy (1990)(Titus).CPR", 5, true); 			  // black screen, no protection detected, fixed ACID unlock sequence
 	//bus.QueueDownload("./cpr/Enforcer, The (1990)(Trojan).CPR", 5, true);  		  // blue border,  no protection detected, white screen, fixed ACID unlock sequence
-	bus.QueueDownload("./cpr/Fire and Forget 2 (1990)(Titus).CPR", 5, true); 		  // black screen, no protection detected, fixed ACID unlock sequence, sprite data downloading, banding
+	//bus.QueueDownload("./cpr/Fire and Forget 2 (1990)(Titus).CPR", 5, true); 		  // black screen, no protection detected, fixed ACID unlock sequence, sprite data downloading, banding
 	//bus.QueueDownload("./cpr/Klax (1990)(Domark).CPR", 5, true);  				  // black screen, no protection detected, no ACID unlock sequence, sprite data downloading
 	//bus.QueueDownload("./cpr/Klax (1990)(Domark)[a].CPR", 5, true); 				  // black screen, no protection detected, no ACID unlock sequence, sprite data downloading
 
@@ -401,10 +401,10 @@ int main(int argc, char** argv, char** env) {
 				mem_edit.DrawContents(&top->top__DOT__sdram__DOT__ram[0], 8388608, 0); // 8MB
 				ImGui::EndTabItem();
 			}
-			if (ImGui::BeginTabItem("ASIC RAM (16K)")) {
-				mem_edit.DrawContents(&top->top__DOT__cart_inst__DOT__acid_inst__DOT__asic_ram[0], 16384, 0); // 16K
-				ImGui::EndTabItem();
-			}
+			//if (ImGui::BeginTabItem("ASIC RAM (16K)")) {
+			//	mem_edit.DrawContents(&top->top__DOT__cart_inst__DOT__acid_inst__DOT__asic_ram[0], 16384, 0); // 16K
+			//	ImGui::EndTabItem();
+			//}
 			ImGui::EndTabBar();
 		}
 		ImGui::End();

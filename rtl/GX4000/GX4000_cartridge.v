@@ -31,7 +31,15 @@ module GX4000_cartridge
     // Plus ROM validation outputs
     output reg    plus_bios_valid,
     output reg [15:0] plus_bios_checksum,
-    output reg [7:0]  plus_bios_version
+    output reg [7:0]  plus_bios_version,
+    
+    // ROM information outputs
+    output reg [7:0]  rom_type,
+    output reg [15:0] rom_size,
+    output reg [15:0] rom_checksum,
+    output reg [7:0]  rom_version,
+    output reg [31:0] rom_date,
+    output reg [63:0] rom_title
 );
 
 // Memory map constants
@@ -486,7 +494,7 @@ always @(posedge clk_sys) begin
                 default: $display("[ACID] CRTC: Unknown register %h = %h", reg_num, cart_data);
             endcase
         end
-  */      
+  */   
         // Protection state machine
         case (protection_state)
             P_IDLE: begin

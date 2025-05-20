@@ -120,7 +120,7 @@ always @(posedge clk_48) begin
     if (ioctl_downlD && !ioctl_download) begin
         rom_loaded <= 1;
         if (plus_download & plus_valid) begin
-            plus_mode <= 1;
+            plus_mode <= 0; // was 0
         end
         download_started <= 0;
         RESET <= 0;
@@ -504,6 +504,7 @@ PlusMode cart_inst
     // Plus-specific outputs
     .plus_bios_valid(plus_valid)
 );
+
 
 // Connect motherboard outputs to intermediate signals
 wire [1:0] mb_r = r;

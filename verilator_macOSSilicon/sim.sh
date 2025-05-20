@@ -18,6 +18,7 @@ verilator \
     ../rtl/GX4000/GX4000_ACID.sv \
     ../rtl/GX4000/GX4000_audio.sv \
     ../rtl/GX4000/GX4000_cartridge.v \
+    ../rtl/GX4000/GX4000_crtc.v \
     ../rtl/GX4000/GX4000_io.v \
     ../rtl/GX4000/GX4000_sprite.sv \
     ../rtl/GX4000/GX4000_video.sv \
@@ -62,8 +63,5 @@ verilator \
     ../obj_dir/Vtop__1__Slow.cpp \
     ../obj_dir/Vtop__2.cpp \
     ../obj_dir/Vtop__2__Slow.cpp \
-    ../obj_dir/Vtop__3.cpp \
-    ../obj_dir/Vtop___024unit.cpp \
-    ../obj_dir/Vtop___024unit__Slow.cpp \
     -CFLAGS "-arch arm64 -I/opt/homebrew/opt/sdl2 -I../sim -I../sim/imgui -I../sim/implot -I../sim/imgui/backends" \
     -LDFLAGS "-arch arm64 -L/opt/homebrew/opt/sdl2/lib -lSDL2 -framework OpenGL -v" && ./obj_dir/Vtop $*

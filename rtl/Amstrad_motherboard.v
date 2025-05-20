@@ -113,59 +113,11 @@ wire M1_n;
 // CPU data input connection
 wire [7:0] di;
 
-`ifdef VERILATOR
-tv80s CPU
-(
-	.reset_n(~reset),
-	.clk(clk),
-	.cen(phi_en_p),
-	.wait_n(ready | (IORQ_n & MREQ_n) | no_wait),
-	.int_n(INT_n & ~irq),
-	.nmi_n(~nmi),
-	.busrq_n(1),
-	.m1_n(M1_n),
-	.mreq_n(MREQ_n),
-	.iorq_n(IORQ_n),
-	.rd_n(RD_n),
-	.wr_n(WR_n),
-	.rfsh_n(RFSH_n),
-	.halt_n(),
-	.busak_n(),
-	.A(A),
-	.di(crtc_dout & ppi_dout & cpu_din),
-	.dout(D)
-);
-`else
-T80pa CPU
-(
-	.reset_n(~reset),
-	
-	.clk(clk),
-	.cen_p(phi_en_p),
-	.cen_n(phi_en_n),
-
-	.a(A),
-	.do(D),
-	.di(crtc_dout & ppi_dout & cpu_din),
-
-	.rd_n(RD_n),
-	.wr_n(WR_n),
-	.iorq_n(IORQ_n),
-	.mreq_n(MREQ_n),
-	.m1_n(M1_n),
-	.rfsh_n(RFSH_n),
-
-	.busrq_n(1),
-	.int_n(INT_n & ~irq),
-	.nmi_n(~nmi),
-	.wait_n(ready | (IORQ_n & MREQ_n) | no_wait) // workaround a bug in T80pa: should wait only in memory or io cycles
-);
-`endif
-
 wire crtc_hs, crtc_vs, crtc_de;
 wire [13:0] MA;
 wire  [4:0] RA;
 wire  [7:0] crtc_dout;
+wire        pri_irq;  // Add PRI interrupt wire
 
 UM6845R CRTC
 (
@@ -244,9 +196,13 @@ crt_filter crt_filter
 	.SHIFT(crtc_shift)
 );
 
+// Add wire for ROM mapping
+wire [7:0] rom_map_wire = rom_map[7:0];
+
 ga40010 GateArray (
 	.clk(clk),
 	.cen_16(ce_16),
+	.ROM(rom_map_wire),
 	.fast(no_wait),
 	.RESET_N(~reset),
 	.A(A[15:14]),
@@ -335,26 +291,24 @@ assign audio_l = {1'b0, ch_a[7:1]} + {2'b00, ch_b[7:2]};
 assign audio_r = {1'b0, ch_c[7:1]} + {2'b00, ch_b[7:2]};
 
 wire [7:0] ch_a, ch_b, ch_c;
+reg psg_active = 1'b1;  // Add register for PSG active state
 YM2149 PSG
 (
-	.RESET(reset),
-
 	.CLK(clk),
+	.RESET(reset),
 	.CE(cclk_en_p),
 	.SEL(0),
 	.MODE(0),
-
 	.BC(portC[6]),
 	.BDIR(portC[7]),
 	.DI(portAout),
 	.DO(portAin),
-
+	.IOA_in(kbd_out),
+	.IOB_in(8'hFF),
+	.ACTIVE(psg_active),
 	.CHANNEL_A(ch_a),
 	.CHANNEL_B(ch_b),
-	.CHANNEL_C(ch_c),
-
-	.IOA_in(kbd_out),
-	.IOB_in(8'hFF)
+	.CHANNEL_C(ch_c)
 );
 
 wire [7:0] kbd_out;
@@ -387,5 +341,54 @@ assign di = ~RD_n ? (  // When reading
         8'hFF                  // Default for other I/O reads
     ) : cpu_din        // Memory read
 ) : 8'hFF;             // Not reading
+
+`ifdef VERILATOR
+tv80s CPU
+(
+	.reset_n(~reset),
+	.clk(clk),
+	.cen(phi_en_p),
+	.wait_n(ready | (IORQ_n & MREQ_n) | no_wait),
+	.int_n(INT_n & ~irq & ~pri_irq),  // Add PRI interrupt to CPU interrupt
+	.nmi_n(~nmi),
+	.busrq_n(1),
+	.m1_n(M1_n),
+	.mreq_n(MREQ_n),
+	.iorq_n(IORQ_n),
+	.rd_n(RD_n),
+	.wr_n(WR_n),
+	.rfsh_n(RFSH_n),
+	.halt_n(),
+	.busak_n(),
+	.A(A),
+	.di(crtc_dout & ppi_dout & cpu_din),
+	.dout(D)
+);
+`else
+T80pa CPU
+(
+	.reset_n(~reset),
+	
+	.clk(clk),
+	.cen_p(phi_en_p),
+	.cen_n(phi_en_n),
+
+	.a(A),
+	.do(D),
+	.di(crtc_dout & ppi_dout & cpu_din),
+
+	.rd_n(RD_n),
+	.wr_n(WR_n),
+	.iorq_n(IORQ_n),
+	.mreq_n(MREQ_n),
+	.m1_n(M1_n),
+	.rfsh_n(RFSH_n),
+
+	.busrq_n(1),
+	.int_n(INT_n & ~irq & ~pri_irq),  // Add PRI interrupt to CPU interrupt
+	.nmi_n(~nmi),
+	.wait_n(ready | (IORQ_n & MREQ_n) | no_wait)
+);
+`endif
 
 endmodule
