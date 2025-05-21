@@ -242,7 +242,7 @@ reg [7:0]  asic_ram_din_reg;
 
     // Modify the sprite pattern address calculation
     wire [13:0] full_sprite_addr = SPRITE_PATTERN_BASE + 
-        {sprite_pattern[active_sprite], sprite_line[3:0], sprite_pixel_count[3:0]};
+        {sprite_pattern[active_sprite][5:0], sprite_line[3:0], sprite_pixel_count[3:0]};
 
     // Sprite output with effects applied
     reg [7:0] sprite_pixel_with_effects;
@@ -301,17 +301,21 @@ always @(posedge clk_sys) begin
             asic_ram_addr_reg <= SPRITE_PATTERN_BASE + {sprite_download_id, sprite_download_offset};
             asic_ram_din_reg <= cpu_data;
             asic_ram_wr_reg <= 1'b1;
+            // Update download tracking
+            sprite_download_offset <= sprite_download_offset + 1'b1;
+            if (sprite_download_offset == 8'hFF) begin
+                sprite_download_id <= sprite_download_id + 1'b1;
+                sprite_download_offset <= 8'h00;
+            end
         end
-
         // Handle sprite attribute downloads
-        if (cpu_wr && (cpu_addr[15:8] == 8'h60) && (cpu_addr[7:5] < 4'h2)) begin
+        else if (cpu_wr && (cpu_addr[15:8] == 8'h60) && (cpu_addr[7:5] < 4'h2)) begin
             asic_ram_addr_reg <= SPRITE_ATTR_BASE + {cpu_addr[4:0]};
             asic_ram_din_reg <= cpu_data;
             asic_ram_wr_reg <= 1'b1;
         end
-
-        // Handle sprite pattern reads
-        if (sprite_active && !hblank && !vblank) begin
+        // Handle sprite pattern reads - set address one cycle before read
+        else if (sprite_active && !hblank && !vblank) begin
             asic_ram_addr_reg <= SPRITE_PATTERN_BASE + {active_sprite, sprite_line};
             asic_ram_rd_reg <= 1'b1;
         end

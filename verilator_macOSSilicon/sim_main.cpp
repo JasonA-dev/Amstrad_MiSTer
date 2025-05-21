@@ -402,7 +402,7 @@ int main(int argc, char** argv, char** env) {
 				ImGui::EndTabItem();
 			}
 			if (ImGui::BeginTabItem("ASIC RAM (16K)")) {
-				mem_edit.DrawContents(&top->top__DOT__cart_inst__DOT__acid_inst__DOT__asic_ram[0], 16384, 0); // 16K
+				mem_edit.DrawContents(&top->top__DOT__cart_inst__DOT__asic_ram[0], 16384, 0); // 16K
 				ImGui::EndTabItem();
 			}
 			ImGui::EndTabBar();

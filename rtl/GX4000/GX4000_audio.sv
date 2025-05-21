@@ -28,7 +28,12 @@ module GX4000_audio
     output reg [7:0] audio_r,
     
     // Status output
-    output  [7:0] audio_status
+    output  [7:0] audio_status,
+    
+    // Audio control registers
+    input   [7:0] audio_control,
+    input   [7:0] audio_config,
+    input   [7:0] audio_volume
 );
 
     // Audio registers

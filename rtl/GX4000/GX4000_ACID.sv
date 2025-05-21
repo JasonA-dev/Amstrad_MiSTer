@@ -78,41 +78,6 @@ module GX4000_ACID
     reg [7:0] asic_register;
     reg [7:0] register_index;
 
-    // 16KB ASIC RAM window (0x4000–0x7FFF)
-    reg [7:0] asic_ram [0:16383];
-
-    // ASIC RAM interface
-    reg [7:0] asic_ram_data;
-    reg [7:0] asic_ram_q_reg;
-
-    // Output assignment
-    assign asic_ram_q = asic_ram_q_reg;
-
-    // ASIC RAM control
-    always @(posedge clk_sys) begin
-        if (reset) begin
-            asic_ram_data <= 8'h00;
-            asic_ram_q_reg <= 8'h00;
-        end else if (plus_mode) begin
-            // Write to ASIC RAM from CPU
-            if (cpu_wr && (cpu_addr >= 16'h4000) && (cpu_addr <= 16'h7FFF)) begin
-                asic_ram[cpu_addr - 16'h4000] <= cpu_data_in;
-            end
-            // Write to ASIC RAM from external port
-            if (asic_ram_wr) begin
-                asic_ram[asic_ram_addr] <= asic_ram_din;
-            end
-            // Read from ASIC RAM for CPU
-            if (cpu_rd && (cpu_addr >= 16'h4000) && (cpu_addr <= 16'h7FFF)) begin
-                asic_ram_data <= asic_ram[cpu_addr - 16'h4000];
-            end
-            // Read from ASIC RAM for external port
-            if (asic_ram_rd) begin
-                asic_ram_q_reg <= asic_ram[asic_ram_addr];
-            end
-        end
-    end
-
     // Sequential register reading for ASIC page (0x4000-0x7FFF)
     always @(posedge clk_sys) begin
         if (reset) begin
@@ -208,7 +173,7 @@ module GX4000_ACID
 
     // Output assignment based on address range
     assign cpu_data_out = 
-        (cpu_addr >= 16'h4000 && cpu_addr <= 16'h7FFF) ? asic_ram_data :
+        (cpu_addr >= 16'h4000 && cpu_addr <= 16'h7FFF) ? asic_ram_q :
         (cpu_addr[15:8] == 8'hBC) ? next_byte :
         8'hFF; // Return 0xFF for all undocumented/test registers, as in MAME
 

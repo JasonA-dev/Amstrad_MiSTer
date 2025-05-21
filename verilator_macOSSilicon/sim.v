@@ -446,16 +446,16 @@ PlusMode cart_inst
 (
     .clk_sys(clk_48),
     .reset(RESET),
-    .plus_mode(plus_mode), // plus_mode
-    .use_asic(1'b1),  // Keep this as it's required by the module interface
-    
+    .plus_mode(plus_mode),
+    .use_asic(plus_mode), // or another appropriate signal for ASIC enable
+
     // CPU interface
     .cpu_addr(cpu_addr),
-    .cpu_data_in(cpu_dout),    // Connect CPU data output to PlusMode input
-    .cpu_data_out(),           // Leave unconnected as it's not used
+    .cpu_data_in(cpu_dout),
     .cpu_wr(wr),
     .cpu_rd(rd),
-    
+    .cpu_data_out(), // not used in this sim
+
     // Video interface
     .r_in(r),
     .g_in(g),
@@ -466,11 +466,11 @@ PlusMode cart_inst
     .r_out(plus_r),
     .g_out(plus_g),
     .b_out(plus_b),
-    
+
     // CRTC interface from motherboard
-    .cclk_en_n(cclk_en_p),     // Connect Gate Array clock enable n n p
-    .crtc_clken(cclk_en_p),    // Keep for backward compatibility
-    .crtc_nclken(cclk_en_n),
+    .cclk_en_n(ce_16),
+    .crtc_clken(ce_16),
+    .crtc_nclken(~ce_16),
     .crtc_ma(MA),
     .crtc_ra(RA),
     .crtc_de(crtc_de),
@@ -478,30 +478,37 @@ PlusMode cart_inst
     .crtc_cursor(cursor),
     .crtc_vsync(crtc_vs),
     .crtc_hsync(crtc_hs),
-    
+
+    // CRTC register write interface to motherboard
+    .crtc_enable(),
+    .crtc_cs_n(),
+    .crtc_r_nw(),
+    .crtc_rs(),
+    .crtc_data(),
+
     // Audio interface
     .cpc_audio_l(audio_l),
     .cpc_audio_r(audio_r),
     .audio_l(plus_audio_l),
     .audio_r(plus_audio_r),
-    
+
     // Joystick interface
-    .joy1(7'h00),
-    .joy2(7'h00),
+    .joy1(joy1),
+    .joy2(joy2),
     .joy_swap(1'b0),
-    
+
     // Cartridge interface
     .cart_addr(cart_addr),
     .cart_data(cart_data),
     .cart_wr(cart_wr),
-    
-    // ROM loading interface - pass through all ioctl signals for CPR files
+
+    // ROM loading interface
     .ioctl_wr(ioctl_wr),
-    .ioctl_addr(download_addr),  // Use tracked address instead of raw ioctl_addr
+    .ioctl_addr(ioctl_addr),
     .ioctl_dout(ioctl_dout),
-    .ioctl_download(plus_cpr_download),  // Only pass CPR downloads
+    .ioctl_download(ioctl_download),
     .ioctl_index(ioctl_index),
-    
+
     // Status outputs
     .rom_type(),
     .rom_size(),
@@ -512,10 +519,8 @@ PlusMode cart_inst
     .asic_valid(),
     .asic_status(),
     .audio_status(),
-    
-    // Plus-specific outputs
     .plus_bios_valid(plus_valid),
-    .pri_irq()
+    .pri_irq(pri_irq)
 );
 
 // Add debug statements for PlusMode signals
