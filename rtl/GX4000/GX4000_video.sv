@@ -204,7 +204,10 @@ reg [7:0]  asic_ram_din_reg;
     // ASIC sync signals
     reg asic_hsync, asic_vsync, asic_hblank, asic_vblank;
 
-    // Mode handling
+
+// ------------------------------------------------------------------------------------------------
+// ASIC mode handling
+// ------------------------------------------------------------------------------------------------
     reg [1:0] video_mode;
     always @(posedge clk_sys) begin
         if (reset) begin
@@ -222,14 +225,34 @@ reg [7:0]  asic_ram_din_reg;
     wire crtc_clken_actual = cclk_en_n;
 
 
+// ------------------------------------------------------------------------------------------------
 // Video output generation
-always @(posedge clk_sys) begin
-    if (reset) begin
-        r_out <= 4'h0;
-        g_out <= 4'h0;
-        b_out <= 4'h0;
-    end else if (crtc_clken_actual) begin
+// ------------------------------------------------------------------------------------------------
+    always @(posedge clk_sys) begin
+        if (reset) begin
+            r_out <= 4'h0;
+            g_out <= 4'h0;
+            b_out <= 4'h0;
+        end else if (cclk_en_n) begin
         if (crtc_de) begin
+            /*
+            if (plus_mode && asic_enabled && asic_ram_rd) begin
+                    r_out <= palette_latch_r;
+                    g_out <= palette_latch_g;
+                    b_out <= palette_latch_b;
+                    $display("ASIC mode: r_out=%h, g_out=%h, b_out=%h", palette_latch_r, palette_latch_g, palette_latch_b);
+            end else begin
+                    // Non-Plus mode or ASIC not reading: Direct 2-bit per channel from motherboard Gate Array
+                    // No palette lookup, just expand 2-bit to 4-bit
+                    r_out <= {2'b00, r_in};
+                    g_out <= {2'b00, g_in};
+                    b_out <= {2'b00, b_in};
+                    $display("Motherboard mode: r_in=%b, g_in=%b, b_in=%b, r_out=%h, g_out=%h, b_out=%h", 
+                            r_in, g_in, b_in, {2'b00, r_in}, {2'b00, g_in}, {2'b00, b_in});
+            end
+*/
+
+            // ------------------------------------------------------------------------------------------------
             case (config_mode)
                 8'h00: begin
                     // Standard CPC mode - use Gate Array colors directly
@@ -278,6 +301,9 @@ always @(posedge clk_sys) begin
                     end
                 end
             endcase
+            // ------------------------------------------------------------------------------------------------
+
+
         end else begin
             // Blanking: Output black
             r_out <= 4'h0;
@@ -287,7 +313,9 @@ always @(posedge clk_sys) begin
     end
 end
             
-    // Initialize registers
+// ------------------------------------------------------------------------------------------------
+// Initialize registers
+// ------------------------------------------------------------------------------------------------
     initial begin
         scroll_control = 8'h00;
         scroll_control_sync = 8'h00;
@@ -373,7 +401,9 @@ end
     audio_volume = 8'h7F;  // Default volume    
     end
 
+// ------------------------------------------------------------------------------------------------
 // ASIC register handling for 0x7F00-0x7FFF range
+// ------------------------------------------------------------------------------------------------
 always @(posedge clk_sys) begin
     if (reset) begin
         // Reset all ASIC registers
@@ -466,7 +496,9 @@ always @(posedge clk_sys) begin
     end
 end
 
+// ------------------------------------------------------------------------------------------------
 // ASIC register read handling
+// ------------------------------------------------------------------------------------------------
 always @(posedge clk_sys) begin
     if (reset) begin
         asic_ram_q_reg <= 8'h00;
@@ -506,6 +538,8 @@ always @(posedge clk_sys) begin
     end
 end
 
+// ------------------------------------------------------------------------------------------------
+
 // Add new synchronized register set
 reg [7:0] asic_control_sync;
 reg [7:0] asic_status_sync;
@@ -539,7 +573,9 @@ end
 // Add tri-state buffer assignment
 assign asic_ram_q = asic_ram_q_oe ? asic_ram_q_reg : 8'bz;
 
-    // CRTC synchronization
+// ------------------------------------------------------------------------------------------------
+// CRTC synchronization
+// ------------------------------------------------------------------------------------------------
     always @(posedge clk_sys) begin
         if (reset) begin
             scroll_control_sync <= 8'h00;
@@ -556,7 +592,9 @@ assign asic_ram_q = asic_ram_q_oe ? asic_ram_q_reg : 8'bz;
         end
     end
 
-    // Video mode handling
+// ------------------------------------------------------------------------------------------------
+// Video mode handling
+// ------------------------------------------------------------------------------------------------
     always @(posedge clk_sys) begin
         if (reset) begin
             config_mode <= 8'h00;
@@ -578,15 +616,18 @@ assign asic_ram_q = asic_ram_q_oe ? asic_ram_q_reg : 8'bz;
                         asic_mode <= cpu_data;
                         // Enable ASIC in Plus mode for modes 0x02, 0x62, and 0x82
                         asic_enabled <= ((cpu_data == 8'h02) || (cpu_data == 8'h62) || (cpu_data == 8'h82)) && plus_mode;
-                        //$display("ASIC mode set to %h, enabled=%b, plus_mode=%b", 
-                        //        cpu_data, asic_enabled, plus_mode);
+                        $display("ASIC mode set to %h, enabled=%b, plus_mode=%b", 
+                                cpu_data, asic_enabled, plus_mode);
                     end
                 endcase
             end
         end
     end
-                
-    // Palette handling
+
+
+// ------------------------------------------------------------------------------------------------
+// Palette handling
+// ------------------------------------------------------------------------------------------------
     always @(posedge clk_sys) begin
         if (reset) begin
             palette_pointer <= 5'h00;
@@ -616,8 +657,12 @@ assign asic_ram_q = asic_ram_q_oe ? asic_ram_q_reg : 8'bz;
             end
         end
     end
-                
-    // Sprite handling
+
+
+
+// ------------------------------------------------------------------------------------------------
+// Sprite handling
+// ------------------------------------------------------------------------------------------------
     always @(posedge clk_sys) begin
         if (reset) begin
             sprite_active <= 1'b0;
@@ -642,7 +687,11 @@ assign asic_ram_q = asic_ram_q_oe ? asic_ram_q_reg : 8'bz;
         end
     end
 
-    // Priority interrupt generation
+
+
+// ------------------------------------------------------------------------------------------------
+// Priority interrupt generation
+// ------------------------------------------------------------------------------------------------
     always @(posedge clk_sys) begin
         if (reset) begin
             pri_irq <= 1'b0;
@@ -659,7 +708,8 @@ assign asic_ram_q = asic_ram_q_oe ? asic_ram_q_reg : 8'bz;
             end
         end
     end
-                    
+
+
     // ASIC RAM control signals
     wire asic_ram_rd_en;
     wire asic_ram_wr_en;
@@ -809,7 +859,10 @@ end
         end
     end
 
-    // Sync signal generation
+
+// ------------------------------------------------------------------------------------------------
+// Sync signal generation
+// ------------------------------------------------------------------------------------------------
     always @(posedge clk_sys) begin
         if (reset) begin
             sync_filter <= 1'b0;
@@ -836,7 +889,11 @@ end
         end
     end
 
-    // Sprite module instance
+
+
+// ------------------------------------------------------------------------------------------------
+// Sprite module instance
+// ------------------------------------------------------------------------------------------------
     GX4000_sprite sprite_inst
     (
         .clk_sys(clk_sys),
@@ -895,7 +952,11 @@ end
         end
     end
 
-    // CRTC and GA40010 register update logic
+
+/*
+// ------------------------------------------------------------------------------------------------
+// CRTC and GA40010 register update logic
+// ------------------------------------------------------------------------------------------------
     always @(posedge clk_sys) begin
         if (reset) begin
             crtc_reg_wr   <= 1'b0;
@@ -924,13 +985,17 @@ end
             end
         end
     end
+*/
 
-    // Add these parameters
     localparam SPRITE_ATTR_BASE = 14'h0000;    // Sprite attributes start at 0x0000
     localparam SPRITE_PATTERN_BASE = 14'h0200;  // Sprite patterns start at 0x0200
     localparam SPRITE_ATTR_SIZE = 14'h0020;     // 32 bytes for 16 sprites
     localparam SPRITE_PATTERN_SIZE = 14'h0100;  // 256 bytes per sprite pattern
 
+
+// ------------------------------------------------------------------------------------------------
+// Frame counter
+// ------------------------------------------------------------------------------------------------
 reg vsync_prev;
 always @(posedge clk_sys) begin
     if (reset) begin
@@ -952,4 +1017,6 @@ always @(posedge clk_sys) begin
         end
     end
 end
+
+
 endmodule 

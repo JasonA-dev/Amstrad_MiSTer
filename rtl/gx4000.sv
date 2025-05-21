@@ -162,7 +162,7 @@ module PlusMode
     (
         .clk_sys(clk_sys),
         .reset(reset),
-        .plus_mode(plus_mode & use_asic),
+        .plus_mode(plus_mode & use_asic),  // plus_mode & use_asic
         
         // CPU interface
         .cpu_addr(cpu_addr),

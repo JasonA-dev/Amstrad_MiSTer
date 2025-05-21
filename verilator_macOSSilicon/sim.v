@@ -446,7 +446,7 @@ PlusMode cart_inst
 (
     .clk_sys(clk_48),
     .reset(RESET),
-    .plus_mode(plus_mode),
+    .plus_mode(plus_mode), // plus_mode
     .use_asic(1'b1),  // Keep this as it's required by the module interface
     
     // CPU interface
@@ -468,9 +468,9 @@ PlusMode cart_inst
     .b_out(plus_b),
     
     // CRTC interface from motherboard
-    .cclk_en_n(cclk_en_n),     // Connect Gate Array clock enable
-    .crtc_clken(cclk_en_n),    // Keep for backward compatibility
-    .crtc_nclken(cclk_en_p),
+    .cclk_en_n(cclk_en_p),     // Connect Gate Array clock enable n n p
+    .crtc_clken(cclk_en_p),    // Keep for backward compatibility
+    .crtc_nclken(cclk_en_n),
     .crtc_ma(MA),
     .crtc_ra(RA),
     .crtc_de(crtc_de),
@@ -649,11 +649,11 @@ wire cclk_en_p;
 // Connect CRTC signals from motherboard
 assign MA = motherboard.MA;
 assign RA = motherboard.RA;
-assign crtc_de = motherboard.crtc_de;
-assign crtc_vs = motherboard.crtc_vs;
-assign crtc_hs = motherboard.crtc_hs;
+assign crtc_de = ~(motherboard.vblank || motherboard.hblank);   // was crtc_de
+assign crtc_vs = motherboard.vsync;   // was crtc_vs
+assign crtc_hs = motherboard.hsync;   // was crtc_hs
 assign field = motherboard.field;
-assign cclk_en_n = motherboard.cclk_en_n;
-assign cclk_en_p = motherboard.cclk_en_p;
+assign cclk_en_n = ce_16; //motherboard.cclk_en_n;
+assign cclk_en_p = ce_16; //motherboard.cclk_en_p;
 
 endmodule

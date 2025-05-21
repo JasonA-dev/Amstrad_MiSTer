@@ -197,12 +197,12 @@ crt_filter crt_filter
 );
 
 // Add wire for ROM mapping
-wire [7:0] rom_map_wire = rom_map[7:0];
+//wire [7:0] rom_map_wire = rom_map[7:0];
 
 ga40010 GateArray (
 	.clk(clk),
 	.cen_16(ce_16),
-	.ROM(rom_map_wire),
+	//.ROM(rom_map_wire),
 	.fast(no_wait),
 	.RESET_N(~reset),
 	.A(A[15:14]),
