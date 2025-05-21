@@ -616,8 +616,8 @@ assign asic_ram_q = asic_ram_q_oe ? asic_ram_q_reg : 8'bz;
                         asic_mode <= cpu_data;
                         // Enable ASIC in Plus mode for modes 0x02, 0x62, and 0x82
                         asic_enabled <= ((cpu_data == 8'h02) || (cpu_data == 8'h62) || (cpu_data == 8'h82)) && plus_mode;
-                        $display("ASIC mode set to %h, enabled=%b, plus_mode=%b", 
-                                cpu_data, asic_enabled, plus_mode);
+                        //$display("ASIC mode set to %h, enabled=%b, plus_mode=%b", 
+                        //        cpu_data, asic_enabled, plus_mode);
                     end
                 endcase
             end
@@ -628,37 +628,39 @@ assign asic_ram_q = asic_ram_q_oe ? asic_ram_q_reg : 8'bz;
 // ------------------------------------------------------------------------------------------------
 // Palette handling
 // ------------------------------------------------------------------------------------------------
-    always @(posedge clk_sys) begin
-        if (reset) begin
-            palette_pointer <= 5'h00;
-            palette_latch_r <= 4'h0;
-            palette_latch_g <= 4'h0;
-            palette_latch_b <= 4'h0;
-        end else if (crtc_clken_actual) begin
-            if (crtc_de) begin  // Remove plus_mode check to allow palette access in all modes
-                // Calculate palette pointer based on current position
-                palette_pointer <= {crtc_ra[2:0], crtc_ma[1:0]};
-                
-                if (plus_mode && asic_enabled) begin
-                    // Plus mode with ASIC enabled: Use ASIC RAM data
-                    palette_latch_r <= {2'b00, asic_ram_q[1:0]};
-                    palette_latch_g <= {2'b00, asic_ram_q[3:2]};
-                    palette_latch_b <= {2'b00, asic_ram_q[5:4]};
-                    //$display("[VIDEO_DEBUG] Plus mode palette: pointer=%h, data=%h, r=%h, g=%h, b=%h",
-                    //        palette_pointer, asic_ram_q, palette_latch_r, palette_latch_g, palette_latch_b);
-                end else begin
-                    // Motherboard mode or ASIC disabled: Use direct color mapping
-                    palette_latch_r <= {2'b00, r_in};
-                    palette_latch_g <= {2'b00, g_in};
-                    palette_latch_b <= {2'b00, b_in};
-                    $display("[VIDEO_DEBUG] Motherboard mode palette: r_in=%b, g_in=%b, b_in=%b",
-                            r_in, g_in, b_in);
-                end
-            end
+always @(posedge clk_sys) begin
+    if (reset) begin
+        palette_pointer <= 5'h00;
+        palette_latch_r <= 4'h0;
+        palette_latch_g <= 4'h0;
+        palette_latch_b <= 4'h0;
+    end else if (crtc_clken_actual) begin
+        if (crtc_de) begin
+            palette_pointer <= {crtc_ra[2:0], crtc_ma[1:0]};
         end
+
+        // Always update palette latches for every pixel, not just when crtc_de is high
+// Only use ASIC palette if MRER[0] is set, as on real hardware
+if (plus_mode && asic_enabled && mrer_mode[0]) begin
+    case (asic_mode)
+        8'h02, 8'h62, 8'h82: begin
+            palette_latch_r <= {2'b00, asic_ram_q[1:0]};
+            palette_latch_g <= {2'b00, asic_ram_q[3:2]};
+            palette_latch_b <= {2'b00, asic_ram_q[5:4]};
+        end
+        default: begin
+            palette_latch_r <= {2'b00, r_in};
+            palette_latch_g <= {2'b00, g_in};
+            palette_latch_b <= {2'b00, b_in};
+        end
+    endcase
+end else begin
+    palette_latch_r <= {2'b00, r_in};
+    palette_latch_g <= {2'b00, g_in};
+    palette_latch_b <= {2'b00, b_in};
+end
     end
-
-
+end
 
 // ------------------------------------------------------------------------------------------------
 // Sprite handling
@@ -720,7 +722,7 @@ assign asic_ram_q = asic_ram_q_oe ? asic_ram_q_reg : 8'bz;
     assign sprite_active_wire = sprite_active;
     
     // ASIC RAM control logic
-    assign asic_ram_rd_en = crtc_clken_actual && crtc_de && asic_enabled;  // Only enable reads when ASIC is enabled
+    assign asic_ram_rd_en = crtc_clken_actual && asic_enabled;  // Only enable reads when ASIC is enabled
     assign asic_ram_wr_en = asic_enabled && 
         (cpu_wr && (cpu_addr[15:8] == 8'h60) && (cpu_addr[7:5] < 4'h2) || 
          cpu_wr && (cpu_addr[15:8] == 8'h40) || 
@@ -754,13 +756,13 @@ end
 /*
     // Debug output for palette access
     always @(posedge clk_sys) begin
-        if (crtc_clken_actual && crtc_de && plus_mode) begin
+        if (crtc_clken_actual && plus_mode) begin
             $display("[VIDEO_DEBUG] Palette access: pointer=%h, addr=%h, data=%h", 
                     palette_pointer, asic_ram_addr, asic_ram_q);
-            $display("[VIDEO_DEBUG] Palette colors: r=%h, g=%h, b=%h", 
-                    palette_latch_r, palette_latch_g, palette_latch_b);
-            $display("[VIDEO_DEBUG] Input colors: r_in=%b, g_in=%b, b_in=%b", 
-                    r_in, g_in, b_in);
+            //$display("[VIDEO_DEBUG] Palette colors: r=%h, g=%h, b=%h", 
+            //        palette_latch_r, palette_latch_g, palette_latch_b);
+            //$display("[VIDEO_DEBUG] Input colors: r_in=%b, g_in=%b, b_in=%b", 
+            //        r_in, g_in, b_in);
         end
     end
 */
