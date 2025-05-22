@@ -14,6 +14,9 @@ module top (
     output wire        VGA_HB,
     output wire        VGA_VB,
     
+    output wire AUDIO_L,
+    output wire AUDIO_R,
+
     input       [10:0] ps2_key,
 
     input        ioctl_download,
@@ -371,6 +374,18 @@ wire [7:0]  tape_din = 8'h00;
 wire        tape_wr = 0;
 wire        tape_wr_ack = 0;
 
+// CRTC register write interface signals from PlusMode to motherboard
+wire crtc_enable;
+wire crtc_cs_n;
+wire crtc_r_nw;
+wire crtc_rs;
+wire [7:0] crtc_data;
+
+wire asic_video_active;
+
+// PlusMode interrupt
+wire pri_irq;
+
 // Add back Amstrad motherboard instantiation
 Amstrad_motherboard motherboard
 (
@@ -445,8 +460,17 @@ Amstrad_motherboard motherboard
     .plus_crtc_cs_n(crtc_cs_n),
     .plus_crtc_r_nw(crtc_r_nw),
     .plus_crtc_rs(crtc_rs),
-    .plus_crtc_data(crtc_data)
+    .plus_crtc_data(crtc_data),
+    .asic_video_active(asic_video_active)
 );
+
+// Add stub signals for analog_in and dma_status for PlusMode
+wire [5:0] analog_in [3:0];
+assign analog_in[0] = 6'b0;
+assign analog_in[1] = 6'b0;
+assign analog_in[2] = 6'b0;
+assign analog_in[3] = 6'b0;
+wire [7:0] dma_status = 8'b0;
 
 // PlusMode instance (handles all Plus mode functionality)
 PlusMode cart_inst
@@ -462,6 +486,8 @@ PlusMode cart_inst
     .cpu_wr(wr),
     .cpu_rd(rd),
     .cpu_data_out(), // not used in this sim
+
+    .sdram_dout(vram_dout),
 
     // Video interface
     .r_in(r),
@@ -527,7 +553,11 @@ PlusMode cart_inst
     .asic_status(),
     .audio_status(),
     .plus_bios_valid(plus_valid),
-    .pri_irq(pri_irq)
+    .pri_irq(pri_irq),
+    .asic_video_active(asic_video_active),
+
+    // New signals for PlusMode
+    .analog_in(analog_in)
 );
 
 // Add debug statements for PlusMode signals
@@ -603,6 +633,9 @@ assign VGA_HS = ~hs;  // Invert for VGA
 assign VGA_VS = ~vs;  // Invert for VGA
 assign VGA_HB = hbl;
 assign VGA_VB = vbl;
+
+assign AUDIO_L = audio_l;
+assign AUDIO_R = audio_r;
 
 // SDRAM interface
 mock_sdram sdram

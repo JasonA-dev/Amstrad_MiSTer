@@ -13,9 +13,9 @@ module color_mix
 	input            ce_pix,
 	input      [2:0] mix,
 
-	input      [1:0] R_in,
-	input      [1:0] G_in,
-	input      [1:0] B_in,
+	input      [3:0] R_in,
+	input      [3:0] G_in,
+	input      [3:0] B_in,
 	input            HSync_in,
 	input            VSync_in,
 	input            HBlank_in,

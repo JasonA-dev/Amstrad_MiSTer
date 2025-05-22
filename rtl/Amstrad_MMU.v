@@ -33,12 +33,15 @@ module Amstrad_MMU
 	input        gx4000_mode,    // GX4000 mode compatibility input 
 	input        plus_mode,      // Plus mode input
 	input        plus_rom_loaded, // Indicates when a Plus ROM has been loaded
+	input        asic_enabled,
+	input  [7:0] rmr2,
 
 	input        io_WR,
 
 	input  [7:0] D,
 	input [15:0] A,
-	output reg [22:0] ram_A
+	output reg [22:0] ram_A,
+	output reg      asic_reg_sel
 );
 
 // Combine inputs for a unified Plus mode
@@ -76,32 +79,51 @@ always @(posedge CLK) begin
 end
 
 always @(posedge CLK) begin
-	/*
-	if (active_plus_mode) begin
-		// Unified Plus mode mapping
-		casex({romen_n, A[15:14]})
-			// When ROM is enabled
-			'b0_00: begin
-				// Lower ROM - always use standard OS ROM for keyboard access
-				ram_A[22:14] = {1'b1, 8'h00};
+	// Full Plus/GX4000 MMU logic
+	// Default: no ASIC register access
+	asic_reg_sel = 1'b0;
+	
+	if (asic_enabled && (A[15:0] >= 16'h4000 && A[15:0] <= 16'h7FFF) && (rmr2[4:3] == 2'b11)) begin
+		// Map 0x4000-0x7FFF to ASIC registers
+		asic_reg_sel = 1'b1;
+		// ram_A is don't care in this case
+		ram_A = 23'h0;
+	end else if (asic_enabled && (rmr2[4:3] != 2'b11)) begin
+		// Cartridge ROM mapping based on rmr2
+		// rmr2[2:0] = cart bank, rmr2[4:3] = location
+		// 0x00: 0x0000, 0x08: 0x4000, 0x10: 0x8000, 0x18: 0x0000+ASIC
+		case ({A[15:13]})
+			3'b000: begin // 0x0000-0x1FFF
+				if ((rmr2[4:3] == 2'b00) && (A[15:0] < 16'h4000)) begin
+					// Cart ROM at 0x0000
+					ram_A = {1'b1, (rmr2[2:0]), A[13:0]};
+				end else begin
+					// Standard RAM/ROM mapping
+					ram_A = {2'b00, 5'd2, A[15:14], A[13:0]};
+				end
 			end
-			'b0_11: begin
-				// Upper ROM with ROM banking
-				if (ROMbank == 8'h00)
-					ram_A[22:14] = {1'b1, 8'h07};      // Default bank 7 (BASIC)
-				else if (ROMbank == 8'h07 && plus_rom_loaded)
-					ram_A[22:14] = {1'b1, 8'h01};      // Plus ROM bank
-				else
-					ram_A[22:14] = {1'b1, ROMbank};    // Other ROM banks (standard mapping)
+			3'b010: begin // 0x4000-0x5FFF
+				if ((rmr2[4:3] == 2'b01) && (A[15:0] >= 16'h4000 && A[15:0] < 16'h6000)) begin
+					// Cart ROM at 0x4000
+					ram_A = {1'b1, (rmr2[2:0]), A[13:0]};
+				end else begin
+					ram_A = {2'b00, 5'd2, A[15:14], A[13:0]};
+				end
 			end
-			// Standard RAM mapping for compatibility
+			3'b100: begin // 0x8000-0x9FFF
+				if ((rmr2[4:3] == 2'b10) && (A[15:0] >= 16'h8000 && A[15:0] < 16'hA000)) begin
+					// Cart ROM at 0x8000
+					ram_A = {1'b1, (rmr2[2:0]), A[13:0]};
+				end else begin
+					ram_A = {2'b00, 5'd2, A[15:14], A[13:0]};
+				end
+			end
 			default: begin
-				ram_A[22:14] = {2'b00, 5'd2, A[15:14]}; // Standard 64KB mapping
+				// Standard RAM/ROM mapping
+				ram_A = {2'b00, 5'd2, A[15:14], A[13:0]};
 			end
 		endcase
-	end
-	else begin
-	*/
+	end else begin
 		// Standard CPC mapping
 		casex({romen_n, RAMmap, A[15:14]})
 			'b0_xxx_xx: ram_A[22:14] = {9{A[15]}} & {1'b1, ROMbank};  // lower/upper rom
@@ -111,9 +133,8 @@ always @(posedge CLK) begin
 			'b1_1xx_01: ram_A[22:14] = {2'b00, RAMpage, RAMmap[1:0]}; // map4-7 bank1   (ext  0..3)
 			   default: ram_A[22:14] = {2'b00,    5'd2,    A[15:14]}; // base 64KB map  (base 0..3)
 		endcase
-	//end
-
-	ram_A[13:0] = A[13:0];
+		ram_A[13:0] = A[13:0];
+	end
 end
 
 /*

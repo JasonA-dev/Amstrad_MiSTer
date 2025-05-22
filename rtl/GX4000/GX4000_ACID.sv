@@ -94,9 +94,9 @@ module GX4000_ACID
                 8'h02: asic_register <= sprite_collision;// Sprite collision register
                 8'h03: asic_register <= audio_control;   // Audio control register
                 8'h04: asic_register <= audio_status;    // Audio status register
-                8'h05: asic_register <= 8'h00;          // Reserved
-                8'h06: asic_register <= 8'h00;          // Reserved
-                8'h07: asic_register <= 8'h00;          // Reserved
+                8'h05: asic_register <= 8'h00;           // Reserved
+                8'h06: asic_register <= 8'h00;           // Reserved
+                8'h07: asic_register <= 8'h00;           // Reserved
                 default: asic_register <= 8'h00;         // Return 0 for other reads
             endcase
         end

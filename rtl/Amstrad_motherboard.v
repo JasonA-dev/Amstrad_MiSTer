@@ -88,7 +88,9 @@ module Amstrad_motherboard
 	input         plus_crtc_cs_n,
 	input         plus_crtc_r_nw,
 	input         plus_crtc_rs,
-	input   [7:0] plus_crtc_data
+	input   [7:0] plus_crtc_data,
+
+	input         asic_video_active
 );
 
 wire crtc_shift;
@@ -156,7 +158,9 @@ UM6845R CRTC
 	.CURSOR(cursor),
 
 	.MA(MA),
-	.RA(RA)
+	.RA(RA),
+
+	.asic_video_active(asic_video_active)
 );
 
 wire [14:0] crtc_vram_addr = {MA[13:12], RA[2:0], MA[9:0]};
@@ -258,6 +262,12 @@ ga40010 GateArray (
 	.RED(red[1])
 );
 
+// Add wires for MMU ASIC/Plus signals
+wire asic_enabled;
+wire [7:0] rmr2;
+wire asic_reg_sel;
+
+// Instantiate MMU with new ports
 Amstrad_MMU MMU
 (
 	.CLK(clk),
@@ -268,10 +278,13 @@ Amstrad_MMU MMU
 	.gx4000_mode(gx4000_mode),
 	.plus_mode(plus_mode),
 	.plus_rom_loaded(plus_rom_loaded),
+	.asic_enabled(asic_enabled),
+	.rmr2(rmr2),
 	.A(A),
 	.D(D),
 	.io_WR(io_wr),
-	.ram_A(mem_addr)
+	.ram_A(mem_addr),
+	.asic_reg_sel(asic_reg_sel)
 );
 
 wire [7:0] ppi_dout;
@@ -354,64 +367,18 @@ assign di = ~RD_n ? (  // When reading
         ~A[14] ? crtc_dout :  // CRTC read
         ~A[11] ? ppi_dout :   // PPI read
         8'hFF                  // Default for other I/O reads
-    ) : cpu_din        // Memory read
+    ) : 
+    // Memory read
+    (asic_reg_sel && (A[15:0] >= 16'h4000 && A[15:0] <= 16'h7FFF)) ? 
+        asic_ram_q : // Read from ASIC register block
+        cpu_din      // Read from RAM/ROM/Cartridge
 ) : 8'hFF;             // Not reading
 
-`ifdef VERILATOR
-tv80s CPU
-(
-	.reset_n(~reset),
-	.clk(clk),
-	.cen(phi_en_p),
-	.wait_n(ready | (IORQ_n & MREQ_n) | no_wait),
-	.int_n(INT_n & ~irq & ~pri_irq),  // Add PRI interrupt to CPU interrupt
-	.nmi_n(~nmi),
-	.busrq_n(1),
-	.m1_n(M1_n),
-	.mreq_n(MREQ_n),
-	.iorq_n(IORQ_n),
-	.rd_n(RD_n),
-	.wr_n(WR_n),
-	.rfsh_n(RFSH_n),
-	.halt_n(),
-	.busak_n(),
-	.A(A),
-	.di(crtc_dout & ppi_dout & cpu_din),
-	.dout(D)
-);
-`else
-T80pa CPU
-(
-	.reset_n(~reset),
-	
-	.clk(clk),
-	.cen_p(phi_en_p),
-	.cen_n(phi_en_n),
-
-	.a(A),
-	.do(D),
-	.di(crtc_dout & ppi_dout & cpu_din),
-
-	.rd_n(RD_n),
-	.wr_n(WR_n),
-	.iorq_n(IORQ_n),
-	.mreq_n(MREQ_n),
-	.m1_n(M1_n),
-	.rfsh_n(RFSH_n),
-
-	.busrq_n(1),
-	.int_n(INT_n & ~irq & ~pri_irq),  // Add PRI interrupt to CPU interrupt
-	.nmi_n(~nmi),
-	.wait_n(ready | (IORQ_n & MREQ_n) | no_wait)
-);
-`endif
-
-// Remove the video module instance and keep only the necessary signals
-wire [3:0] red_out, green_out, blue_out;
-wire sprite_active;
-wire [3:0] sprite_id;
-wire [7:0] collision_reg;
-wire pri_irq;
+// Memory write logic
+// If asic_reg_sel is high and address is in 0x4000–0x7FFF, write to ASIC register block
+// Otherwise, write to RAM/ROM/Cartridge
+wire cpu_wr_asic = wr & asic_reg_sel & (A[15:0] >= 16'h4000) & (A[15:0] <= 16'h7FFF);
+wire cpu_wr_mem  = wr & ~(asic_reg_sel & (A[15:0] >= 16'h4000) & (A[15:0] <= 16'h7FFF));
 
 // ASIC RAM interface signals
 wire [13:0] asic_ram_addr;

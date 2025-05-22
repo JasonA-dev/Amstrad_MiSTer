@@ -47,10 +47,21 @@ module UM6845R
 	input            plus_crtc_cs_n,
 	input            plus_crtc_r_nw,
 	input            plus_crtc_rs,
-	input      [7:0] plus_crtc_data
+	input      [7:0] plus_crtc_data,
+
+	input            asic_video_active
 );
 
 /* verilator lint_off WIDTH */
+
+// Muxed control signals for Plus/ASIC mode
+wire use_plus = plus_mode && asic_video_active && plus_crtc_enable;
+
+wire        mux_ENABLE = use_plus ? 1'b1 : ENABLE;
+wire        mux_nCS    = use_plus ? plus_crtc_cs_n : nCS;
+wire        mux_R_nW   = use_plus ? plus_crtc_r_nw : R_nW;
+wire        mux_RS     = use_plus ? plus_crtc_rs   : RS;
+wire [7:0]  mux_DI     = use_plus ? plus_crtc_data : DI;
 
 assign FIELD = ~field & interlace[0];
 
@@ -82,8 +93,8 @@ reg [7:0] R15_cursor_l;
 reg [4:0] addr;
 always @(*) begin
 	DO = 8'hFF;
-	if (ENABLE & ~nCS) begin
-		if (RS) begin
+	if (mux_ENABLE & ~mux_nCS) begin
+		if (mux_RS) begin
 			case (addr)
 				10: DO = {R10_cursor_mode, R10_cursor_start};
 				11: DO = R11_cursor_end;
@@ -92,7 +103,7 @@ always @(*) begin
 				14: DO = R14_cursor_h;
 				15: DO = R15_cursor_l;
 				31: DO = CRTC_TYPE ? 8'hFF : 8'h00;
-			 default: DO = 0;
+				 default: DO = 0;
 			endcase
 		end
 		else if(CRTC_TYPE) begin
@@ -102,26 +113,26 @@ always @(*) begin
 end
 
 always @(posedge CLOCK) begin
-	if (ENABLE & ~nCS & ~R_nW) begin
-		if (~RS) addr <= DI[4:0];
+	if (mux_ENABLE & ~mux_nCS & ~mux_R_nW) begin
+		if (~mux_RS) addr <= mux_DI[4:0];
 		else begin
 			case (addr)
-				00: R0_h_total <= DI;
-				01: R1_h_displayed <= DI;
-				02: R2_h_sync_pos <= DI;
-				03: {R3_v_sync_width,R3_h_sync_width} <= DI;
-				04: R4_v_total <= DI[6:0];
-				05: R5_v_total_adj <= DI[4:0];
-				06: R6_v_displayed <= DI[6:0];
-				07: R7_v_sync_pos <= DI[6:0];
-				08: {R8_skew, R8_interlace} <= {DI[5:4],DI[1:0]};
-				09: R9_v_max_line <= DI[4:0];
-				10: {R10_cursor_mode,R10_cursor_start} <= DI[6:0];
-				11: R11_cursor_end <= DI[4:0];
-				12: R12_start_addr_h <= DI[5:0];
-				13: R13_start_addr_l <= DI[7:0];
-				14: R14_cursor_h <= DI[5:0];
-				15: R15_cursor_l <= DI[7:0];
+				00: R0_h_total <= mux_DI;
+				01: R1_h_displayed <= mux_DI;
+				02: R2_h_sync_pos <= mux_DI;
+				03: {R3_v_sync_width,R3_h_sync_width} <= mux_DI;
+				04: R4_v_total <= mux_DI[6:0];
+				05: R5_v_total_adj <= mux_DI[4:0];
+				06: R6_v_displayed <= mux_DI[6:0];
+				07: R7_v_sync_pos <= mux_DI[6:0];
+				08: {R8_skew, R8_interlace} <= {mux_DI[5:4],mux_DI[1:0]};
+				09: R9_v_max_line <= mux_DI[4:0];
+				10: {R10_cursor_mode,R10_cursor_start} <= mux_DI[6:0];
+				11: R11_cursor_end <= mux_DI[4:0];
+				12: R12_start_addr_h <= mux_DI[5:0];
+				13: R13_start_addr_l <= mux_DI[7:0];
+				14: R14_cursor_h <= mux_DI[5:0];
+				15: R15_cursor_l <= mux_DI[7:0];
 			endcase
 		end
 	end
@@ -232,7 +243,7 @@ always @(posedge CLOCK) begin
 		if (hsync_off)     HSYNC <= 0;
 		else if (hsync_on) HSYNC <= 1;
 
-		if (ENABLE & RS & ~nCS & ~R_nW & addr == 5'd01 & hcc == DI) hde <= 0;
+		if (mux_ENABLE & mux_RS & ~mux_nCS & ~mux_R_nW & addr == 5'd01 & hcc == mux_DI) hde <= 0;
 
 		if (CLKEN) begin
 			if(line_new)                   hde <= 1;
@@ -288,22 +299,22 @@ always @(posedge CLOCK) begin
 		end
 	end
 
-	if (ENABLE & RS & ~nCS & ~R_nW & addr == 5'd07) begin
+	if (mux_ENABLE & mux_RS & ~mux_nCS & ~mux_R_nW & addr == 5'd07) begin
 		vsync_allow <= 1;
-		if (row == DI[6:0] && !VSYNC_r) begin
+		if (row == mux_DI[6:0] && !VSYNC_r) begin
 			// TODO: extra conditions for CRTC0
 			VSYNC_r <= 1;
 			vsc <= (CRTC_TYPE ? 4'd0 : R3_v_sync_width) - 1'd1;
 		end
 	end
-	if (nCLKEN & ENABLE & RS & ~nCS & ~R_nW & addr == 5'd06) begin
+	if (nCLKEN & mux_ENABLE & mux_RS & ~mux_nCS & ~mux_R_nW & addr == 5'd06) begin
 		if (CRTC_TYPE) begin
-			if (row == DI[6:0]) vde_r <= 0;
-			if (row != DI[6:0] && DI[6:0] != 0) vde <= vde_r;
-			if (row == R6_v_displayed && DI[6:0] != row) vde <= 1;
-			if (row == DI[6:0] || DI[6:0] == 0) vde <= 0;
+			if (row == mux_DI[6:0]) vde_r <= 0;
+			if (row != mux_DI[6:0] && mux_DI[6:0] != 0) vde <= vde_r;
+			if (row == R6_v_displayed && mux_DI[6:0] != row) vde <= 1;
+			if (row == mux_DI[6:0] || mux_DI[6:0] == 0) vde <= 0;
 		end else begin
-			if (row == DI[6:0] && !(row == 0 && line == 0)) vde_r <= 0;
+			if (row == mux_DI[6:0] && !(row == 0 && line == 0)) vde_r <= 0;
 		end
 	end
 end

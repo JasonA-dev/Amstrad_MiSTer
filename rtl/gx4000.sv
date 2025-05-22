@@ -78,7 +78,23 @@ module PlusMode
     
     // Plus-specific outputs
     output        plus_bios_valid,
-    output        pri_irq
+    output reg   pri_irq,
+
+    output        asic_video_active,
+
+    input   [7:0] sdram_dout,
+
+    // Added for ASIC 0x6000 region read logic
+    input  [5:0] analog_in [3:0], // 4 analogue channels, 6 bits each
+
+    // Add SDRAM interface signals
+    output [22:0] sdram_addr,
+    output        sdram_oe,
+    output        sdram_we,
+    output [7:0]  sdram_din,
+
+    // Removed the duplicate dma_status register and use internal_dma_status instead
+    reg [2:0] internal_dma_status         // DMA status bits
 );
 
     // Internal signals
@@ -164,30 +180,30 @@ module PlusMode
     reg       asic_enabled;
 
     // Video mode handling
-    always @(posedge clk_sys) begin
-        if (reset) begin
-            config_mode <= 8'h00;
-            mrer_mode <= 5'h00;
-            asic_mode <= 8'h00;
-            asic_enabled <= 1'b0;
-        end else if (cpu_wr && cpu_addr[15:8] == 8'hBC) begin
-            if (cpu_addr[0] == 0) begin
-                case (cpu_data_in[4:0])
-                    5'h00: begin
-                        config_mode <= cpu_data_in;
-                    end
-                    5'h01: begin
-                        mrer_mode <= cpu_data_in[4:0];
-                    end
-                    5'h02: begin
-                        asic_mode <= cpu_data_in;
-                        // Enable ASIC in Plus mode for modes 0x02, 0x62, and 0x82
-                        asic_enabled <= ((cpu_data_in == 8'h02) || (cpu_data_in == 8'h62) || (cpu_data_in == 8'h82)) && plus_mode;
-                    end
-                endcase
-            end
+always @(posedge clk_sys) begin
+    if (reset) begin
+        config_mode <= 8'h00;
+        mrer_mode <= 5'h00;
+        asic_mode <= 8'h00;
+        asic_enabled <= 1'b0;
+    end else if (cpu_wr && cpu_addr[15:8] == 8'hBC) begin
+        if (cpu_addr[0] == 0) begin
+            case (cpu_data_in[4:0])
+                5'h00: begin
+                    config_mode <= cpu_data_in;
+                end
+                5'h01: begin
+                    mrer_mode <= cpu_data_in[4:0];
+                end
+                5'h02: begin
+                    asic_mode <= cpu_data_in;
+                    // Enable ASIC in Plus mode for modes 0x02, 0x62, and 0x82
+                    asic_enabled <= ((cpu_data_in == 8'h02) || (cpu_data_in == 8'h62) || (cpu_data_in == 8'h82)) && plus_mode;
+                end
+            endcase
         end
     end
+end
 
     // I/O module instance
     GX4000_io io_inst
@@ -223,7 +239,7 @@ module PlusMode
     (
         .clk_sys(clk_sys),
         .reset(reset),
-        .plus_mode(plus_mode & use_asic),  // plus_mode & use_asic
+        .plus_mode(plus_mode & use_asic),
         
         // CPU interface
         .cpu_addr(cpu_addr),
@@ -283,10 +299,10 @@ module PlusMode
         .sprite_collision(sprite_collision),
 
         // ASIC RAM interface
-        .asic_ram_addr(asic_ram_addr),
-        .asic_ram_rd(asic_ram_rd),
-        .asic_ram_wr(asic_ram_wr),
-        .asic_ram_din(asic_ram_din),
+        .asic_ram_addr(asic_ram_addr_mod),
+        .asic_ram_rd(asic_ram_rd_mod),
+        .asic_ram_wr(asic_ram_wr_mod),
+        .asic_ram_din(asic_ram_din_mod),
         .asic_ram_q(asic_ram_q),
         
         // CRTC update interface
@@ -306,7 +322,10 @@ module PlusMode
         .asic_vblank_in(asic_vblank_in),
         
         // Interrupt output
-        .pri_irq(pri_irq)
+        .pri_irq(pri_irq),
+
+        .asic_video_active(asic_video_active),
+        .vram_dout(sdram_dout)
     );
 
     // ACID module instance
@@ -350,22 +369,30 @@ module PlusMode
         .reset(reset),
         .plus_mode(plus_mode & use_asic),
         .cpu_addr(cpu_addr),
-        .cpu_data(cpu_data_in),  // Use cpu_data_in
+        .cpu_data(cpu_data_in),
         .cpu_wr(cpu_wr),
         .cpu_rd(cpu_rd),
         .cpc_audio_l(cpc_audio_l),
         .cpc_audio_r(cpc_audio_r),
-        .sprite_id(sprite_id),                 // Connect to sprite signals from video module
-        .sprite_collision(sprite_active),      // Use sprite_active as collision signal
-        .sprite_movement(collision_reg),       // Use collision register
+        .sprite_id(sprite_id),
+        .sprite_collision(sprite_active),
+        .sprite_movement(collision_reg),
         .hblank(hblank),
         .vblank(vblank),
         .audio_l(audio_l),
         .audio_r(audio_r),
         .audio_status(audio_status),
-        .audio_control(io_control),            // Connect to I/O control register
-        .audio_config(io_config),              // Connect to I/O config register
-        .audio_volume(io_volume)               // Connect to I/O volume register
+        .audio_control(io_control),
+        .audio_config(io_config),
+        .audio_volume(io_volume),
+        .dma_status(dma_status_audio),
+        .dma_irq(dma_irq_audio),
+        .psg_address(psg_address),
+        .psg_data(psg_data),
+        .psg_wr(psg_wr),
+        .psg_ch_a(psg_ch_a),
+        .psg_ch_b(psg_ch_b),
+        .psg_ch_c(psg_ch_c)
     );
 
     // Cartridge module instance
@@ -451,18 +478,31 @@ reg [7:0] last_asic_ram_din;
 reg last_asic_ram_wr;
 reg last_asic_ram_rd;
 
-// Add ASIC RAM access from CPU
-wire cpu_asic_ram_access = plus_mode && use_asic && (cpu_addr >= 16'h4000) && (cpu_addr <= 16'h7FFF);
-wire [13:0] cpu_asic_ram_addr = cpu_addr[13:0];  // Map 0x4000-0x7FFF to 0x0000-0x3FFF
-wire [7:0] cpu_asic_ram_data = cpu_data_in;
+// Internal signals for ASIC RAM access
+wire [13:0] asic_ram_addr_cpu = cpu_addr[13:0];
+wire [13:0] asic_ram_addr_mod; // driven by video/sprite/acid modules
+wire        asic_ram_rd_mod;
+wire        asic_ram_wr_mod;
+wire [7:0]  asic_ram_din_mod;
 
-// Modify ASIC RAM interface to include CPU access
-assign asic_ram_addr = cpu_asic_ram_access ? cpu_asic_ram_addr : asic_ram_addr;
-assign asic_ram_din = cpu_asic_ram_access ? cpu_asic_ram_data : asic_ram_din;
-assign asic_ram_wr = cpu_asic_ram_access ? cpu_wr : 1'b0;  // Only allow writes from CPU
-assign asic_ram_rd = cpu_asic_ram_access ? cpu_rd : asic_ram_rd;
+// Add RMR2 check for ASIC RAM access
+wire asic_rmr2_enabled = mrer_mode[4] && mrer_mode[3]; // RMR2[4:3] == 2'b11
 
-// ASIC RAM read/write logic
+// Update cpu_asic_ram_access to include RMR2 check
+wire cpu_asic_ram_access = plus_mode && use_asic && asic_enabled && asic_rmr2_enabled && (cpu_addr >= 16'h4000) && (cpu_addr <= 16'h7FFF);
+
+wire [13:0] asic_ram_addr_mux = cpu_asic_ram_access ? asic_ram_addr_cpu : asic_ram_addr_mod;
+wire        asic_ram_rd_mux   = cpu_asic_ram_access ? cpu_rd : asic_ram_rd_mod;
+wire        asic_ram_wr_mux   = cpu_asic_ram_access ? cpu_wr : asic_ram_wr_mod;
+wire [7:0]  asic_ram_din_mux  = cpu_asic_ram_access ? cpu_data_in : asic_ram_din_mod;
+
+// Assign to outputs
+assign asic_ram_addr = asic_ram_addr_mux;
+assign asic_ram_rd   = asic_ram_rd_mux;
+assign asic_ram_wr   = asic_ram_wr_mux;
+assign asic_ram_din  = asic_ram_din_mux;
+
+// ASIC RAM write logic for 0x6000-0x7FFF region
 always @(posedge clk_sys) begin
     if (reset) begin
         asic_ram_q_reg <= 8'h00;
@@ -481,71 +521,91 @@ always @(posedge clk_sys) begin
         last_asic_ram_wr <= asic_ram_wr;
         last_asic_ram_rd <= asic_ram_rd;
 
-        // Write from CPU to ASIC RAM
-        if (asic_ram_wr && cpu_asic_ram_access) begin
-            asic_ram[asic_ram_addr] <= asic_ram_din;
-            // Update read data immediately on write
-            asic_ram_q_reg <= asic_ram_din;
-            // Debug output
-            //$display("[ASIC RAM] CPU Write: addr=%04X, data=%02X", asic_ram_addr, asic_ram_din);
+        // Enhanced ASIC RAM write logic for 0x6000-0x7FFF
+        if (asic_ram_wr && (cpu_addr >= 16'h6000) && (cpu_addr <= 16'h7FFF)) begin
+            if (plus_mode && use_asic && asic_enabled && (mrer_mode[4] && mrer_mode[3])) begin
+                // Offset into ASIC RAM for 0x6000 region
+                logic [13:0] asic_offset;
+                asic_offset = cpu_addr[12:0] + 13'h2000;
+                
+                // Palette writes: odd offsets in 0x0400..0x043F
+                if ((cpu_addr[11:0] >= 12'h400) && (cpu_addr[11:0] < 12'h440) && cpu_addr[0]) begin
+                    asic_ram[asic_offset] <= {4'b0000, cpu_data_in[3:0]};
+                end else begin
+                    asic_ram[asic_offset] <= cpu_data_in;
+                end
+
+                // Programmable raster interrupt
+                if (cpu_addr[12:0] == 13'h800) begin
+                    pri_line <= cpu_data_in;
+                end
+
+                // Split screen registers
+                if ((cpu_addr[12:0] >= 13'h801) && (cpu_addr[12:0] <= 13'h803)) begin
+                    // Split screen line and address are stored in ASIC RAM
+                    // Logging handled in video module
+                end
+
+                // Soft scroll register
+                if (cpu_addr[12:0] == 13'h804) begin
+                    soft_scroll_h <= cpu_data_in[3:0];  // Horizontal delay in mode 2 pixels
+                    soft_scroll_v <= cpu_data_in[6:4];  // Vertical scroll
+                    extend_border <= cpu_data_in[7];    // Border extension
+                end
+
+                // Interrupt vector register
+                if (cpu_addr[12:0] == 13'h805) begin
+                    interrupt_vector <= cpu_data_in[7:3];  // High 5 bits for vector
+                end
+
+            end
         end
         // Read for video/other modules
         else if (asic_ram_rd) begin
             asic_ram_q_reg <= asic_ram[asic_ram_addr];
-            // Debug output
-            //$display("[ASIC RAM] Read: addr=%04X, data=%02X", asic_ram_addr, asic_ram[asic_ram_addr]);
         end
     end
 end
 
-// Add ASIC RAM access logging
+// Add new registers for ASIC functionality
+reg [7:0] pri_line;           // Programmable raster interrupt line
+reg [3:0] soft_scroll_h;      // Horizontal scroll
+reg [2:0] soft_scroll_v;      // Vertical scroll
+reg extend_border;            // Border extension flag
+reg [4:0] interrupt_vector;   // Interrupt vector
+
+// Define ASIC page enabled signal
+wire asic_page_enabled = plus_mode && use_asic && (cpu_addr >= 16'h4000) && (cpu_addr <= 16'h7FFF);
+
+// Log all ASIC-related I/O port accesses
 always @(posedge clk_sys) begin
-    if (cpu_wr && cpu_asic_ram_access) begin
-        //$display("[ASIC] CPU Write to ASIC RAM: addr=%04X, data=%02X", cpu_addr, cpu_data_in);
+    if (cpu_wr) begin
+        if ((cpu_addr[15:8] == 8'h7F) || (cpu_addr[15:8] == 8'hDF) ||
+            (cpu_addr[15:8] == 8'hBC) || (cpu_addr[15:8] == 8'hBD) ||
+            (cpu_addr[15:8] == 8'hBE) || (cpu_addr[15:8] == 8'hBF)) begin
+            //$display("[ASIC] CPU WRITE to port %04X: Data=%02X", cpu_addr, cpu_data_in);
+        end
     end
-    if (cpu_rd && cpu_asic_ram_access) begin
-        //$display("[ASIC] CPU Read from ASIC RAM: addr=%04X", cpu_addr);
+    if (cpu_rd) begin
+        if ((cpu_addr[15:8] == 8'h7F) || (cpu_addr[15:8] == 8'hDF) ||
+            (cpu_addr[15:8] == 8'hBC) || (cpu_addr[15:8] == 8'hBD) ||
+            (cpu_addr[15:8] == 8'hBE) || (cpu_addr[15:8] == 8'hBF)) begin
+            //$display("[ASIC] CPU READ from port %04X", cpu_addr);
+        end
     end
 end
 
-// Connect CPU data output for ASIC RAM reads
-assign cpu_data_out = (cpu_asic_ram_access && cpu_rd) ? asic_ram_q : 
-                     (cpu_addr[15:8] == 8'h7F || cpu_addr[15:8] == 8'hDF) ? io_dout :
-                     (cpu_addr[15:8] == 8'hBC) ? acid_data_out :
-                     8'hFF;
-
-    // Define ASIC page enabled signal
-    wire asic_page_enabled = plus_mode && use_asic && (cpu_addr >= 16'h4000) && (cpu_addr <= 16'h7FFF);
-
-    // Log all ASIC-related I/O port accesses
-    always @(posedge clk_sys) begin
+// Log all accesses to ASIC I/O page (when enabled)
+always @(posedge clk_sys) begin
+    if (asic_page_enabled) begin
         if (cpu_wr) begin
-            if ((cpu_addr[15:8] == 8'h7F) || (cpu_addr[15:8] == 8'hDF) ||
-                (cpu_addr[15:8] == 8'hBC) || (cpu_addr[15:8] == 8'hBD) ||
-                (cpu_addr[15:8] == 8'hBE) || (cpu_addr[15:8] == 8'hBF)) begin
-                //$display("[ASIC] CPU WRITE to port %04X: Data=%02X", cpu_addr, cpu_data_in);
-            end
+            //$display("[ASIC] CPU WRITE to ASIC page %04X: Data=%02X", cpu_addr, cpu_data_in);
         end
         if (cpu_rd) begin
-            if ((cpu_addr[15:8] == 8'h7F) || (cpu_addr[15:8] == 8'hDF) ||
-                (cpu_addr[15:8] == 8'hBC) || (cpu_addr[15:8] == 8'hBD) ||
-                (cpu_addr[15:8] == 8'hBE) || (cpu_addr[15:8] == 8'hBF)) begin
-                //$display("[ASIC] CPU READ from port %04X", cpu_addr);
-            end
+            //$display("[ASIC] CPU READ from ASIC page %04X", cpu_addr);
         end
     end
-
-    // Log all accesses to ASIC I/O page (when enabled)
-    always @(posedge clk_sys) begin
-        if (asic_page_enabled) begin
-            if (cpu_wr) begin
-                //$display("[ASIC] CPU WRITE to ASIC page %04X: Data=%02X", cpu_addr, cpu_data_in);
-            end
-            if (cpu_rd) begin
-                //$display("[ASIC] CPU READ from ASIC page %04X", cpu_addr);
-            end
-        end
-    end
+end
 
 // I/O Control Registers (0x7F30-0x7F3F)
 reg [7:0] io_config;
@@ -564,101 +624,101 @@ always @(posedge clk_sys) begin
         io_volume <= 8'h00;
         
         // Initialize control registers from ASIC RAM
-        asic_control <= asic_ram[16'h3F00 - 16'h4000];  // 0x7F00 -> 0x3F00
-        asic_config <= asic_ram[16'h3F02 - 16'h4000];
-        asic_version <= asic_ram[16'h3F03 - 16'h4000];
+        asic_control <= asic_ram[16'h7F00 - 16'h4000];  // 0x7F00 -> 0x3F00
+        asic_config <= asic_ram[16'h7F02 - 16'h4000];
+        asic_version <= asic_ram[16'h7F03 - 16'h4000];
         
         // Video Control Registers
-        video_control <= asic_ram[16'h3F10 - 16'h4000];
-        video_status <= asic_ram[16'h3F11 - 16'h4000];
-        video_config <= asic_ram[16'h3F12 - 16'h4000];
-        video_palette <= asic_ram[16'h3F13 - 16'h4000];
-        video_effect <= asic_ram[16'h3F14 - 16'h4000];
+        video_control <= asic_ram[16'h7F10 - 16'h4000];
+        video_status <= asic_ram[16'h7F11 - 16'h4000];
+        video_config <= asic_ram[16'h7F12 - 16'h4000];
+        video_palette <= asic_ram[16'h7F13 - 16'h4000];
+        video_effect <= asic_ram[16'h7F14 - 16'h4000];
         
         // Sprite Control Registers
-        sprite_control <= asic_ram[16'h3F20 - 16'h4000];
-        sprite_status <= asic_ram[16'h3F21 - 16'h4000];
-        sprite_config <= asic_ram[16'h3F22 - 16'h4000];
-        sprite_priority <= asic_ram[16'h3F23 - 16'h4000];
-        sprite_collision <= asic_ram[16'h3F24 - 16'h4000];
+        sprite_control <= asic_ram[16'h7F20 - 16'h4000];
+        sprite_status <= asic_ram[16'h7F21 - 16'h4000];
+        sprite_config <= asic_ram[16'h7F22 - 16'h4000];
+        sprite_priority <= asic_ram[16'h7F23 - 16'h4000];
+        sprite_collision <= asic_ram[16'h7F24 - 16'h4000];
         
         // Audio Control Registers
-        audio_control <= asic_ram[16'h3F30 - 16'h4000];
-        audio_config <= asic_ram[16'h3F31 - 16'h4000];
-        audio_volume <= asic_ram[16'h3F32 - 16'h4000];
+        audio_control <= asic_ram[16'h7F30 - 16'h4000];
+        audio_config <= asic_ram[16'h7F31 - 16'h4000];
+        audio_volume <= asic_ram[16'h7F32 - 16'h4000];
         
     end else if (cpu_wr && cpu_addr[15:8] == 8'h7F) begin
         case (cpu_addr[7:0])
             // ASIC Control Registers
             8'h00: begin 
                 asic_control <= cpu_data_in;
-                asic_ram[16'h3F00 - 16'h4000] <= cpu_data_in;
+                asic_ram[16'h7F00 - 16'h4000] <= cpu_data_in;
             end
             8'h02: begin
                 asic_config <= cpu_data_in;
-                asic_ram[16'h3F02 - 16'h4000] <= cpu_data_in;
+                asic_ram[16'h7F02 - 16'h4000] <= cpu_data_in;
             end
             8'h03: begin
                 asic_version <= cpu_data_in;
-                asic_ram[16'h3F03 - 16'h4000] <= cpu_data_in;
+                asic_ram[16'h7F03 - 16'h4000] <= cpu_data_in;
             end
             
             // Video Control Registers
             8'h10: begin
                 video_control <= cpu_data_in;
-                asic_ram[16'h3F10 - 16'h4000] <= cpu_data_in;
+                asic_ram[16'h7F10 - 16'h4000] <= cpu_data_in;
             end
             8'h11: begin
                 video_status <= cpu_data_in;
-                asic_ram[16'h3F11 - 16'h4000] <= cpu_data_in;
+                asic_ram[16'h7F11 - 16'h4000] <= cpu_data_in;
             end
             8'h12: begin
                 video_config <= cpu_data_in;
-                asic_ram[16'h3F12 - 16'h4000] <= cpu_data_in;
+                asic_ram[16'h7F12 - 16'h4000] <= cpu_data_in;
             end
             8'h13: begin
                 video_palette <= cpu_data_in;
-                asic_ram[16'h3F13 - 16'h4000] <= cpu_data_in;
+                asic_ram[16'h7F13 - 16'h4000] <= cpu_data_in;
             end
             8'h14: begin
                 video_effect <= cpu_data_in;
-                asic_ram[16'h3F14 - 16'h4000] <= cpu_data_in;
+                asic_ram[16'h7F14 - 16'h4000] <= cpu_data_in;
             end
             
             // Sprite Control Registers
             8'h20: begin
                 sprite_control <= cpu_data_in;
-                asic_ram[16'h3F20 - 16'h4000] <= cpu_data_in;
+                asic_ram[16'h7F20 - 16'h4000] <= cpu_data_in;
             end
             8'h21: begin
                 sprite_status <= cpu_data_in;
-                asic_ram[16'h3F21 - 16'h4000] <= cpu_data_in;
+                asic_ram[16'h7F21 - 16'h4000] <= cpu_data_in;
             end
             8'h22: begin
                 sprite_config <= cpu_data_in;
-                asic_ram[16'h3F22 - 16'h4000] <= cpu_data_in;
+                asic_ram[16'h7F22 - 16'h4000] <= cpu_data_in;
             end
             8'h23: begin
                 sprite_priority <= cpu_data_in;
-                asic_ram[16'h3F23 - 16'h4000] <= cpu_data_in;
+                asic_ram[16'h7F23 - 16'h4000] <= cpu_data_in;
             end
             8'h24: begin
                 sprite_collision <= cpu_data_in;
-                asic_ram[16'h3F24 - 16'h4000] <= cpu_data_in;
+                asic_ram[16'h7F24 - 16'h4000] <= cpu_data_in;
             end
             
             // Audio Control Registers
             8'h30: begin
                 audio_control <= cpu_data_in;
-                asic_ram[16'h3F30 - 16'h4000] <= cpu_data_in;
+                asic_ram[16'h7F30 - 16'h4000] <= cpu_data_in;
             end
             8'h31: begin
                 audio_config <= cpu_data_in;
-                asic_ram[16'h3F31 - 16'h4000] <= cpu_data_in;
+                asic_ram[16'h7F31 - 16'h4000] <= cpu_data_in;
             end
             8'h32: begin
                 audio_volume <= cpu_data_in;
-                asic_ram[16'h3F32 - 16'h4000] <= cpu_data_in;
+                asic_ram[16'h7F32 - 16'h4000] <= cpu_data_in;
             end
             
             8'h31: io_config <= cpu_data_in;
@@ -666,4 +726,63 @@ always @(posedge clk_sys) begin
         endcase
     end
 end
+
+wire cpu_normal_ram_access = (cpu_addr >= 16'h4000) && (cpu_addr <= 16'h7FFF) && !(cpu_asic_ram_access);
+
+assign sdram_addr = cpu_addr; // or cpu_addr[13:0] if only 16KB, or as needed for your SDRAM mapping
+assign sdram_oe   = cpu_normal_ram_access && cpu_rd;
+assign sdram_we   = cpu_normal_ram_access && cpu_wr;
+assign sdram_din  = cpu_data_in;
+
+// Update cpu_data_out assignment
+assign cpu_data_out = (cpu_asic_ram_access && cpu_rd && (cpu_addr >= 16'h6000) && (cpu_addr <= 16'h7FFF)) ?
+    (
+        // Analogue ports: 0x0808-0x080B
+        ((cpu_addr[12:0] >= 13'h808) && (cpu_addr[12:0] <= 13'h80B)) ? {2'b00, analog_in[cpu_addr[1:0]]} :
+        // 0x080C or 0x080E
+        ((cpu_addr[12:0] == 13'h80C) || (cpu_addr[12:0] == 13'h80E)) ? 8'h3F :
+        // 0x080D or 0x080F
+        ((cpu_addr[12:0] == 13'h80D) || (cpu_addr[12:0] == 13'h80F)) ? 8'h00 :
+        // 0x0C0F: DMA status
+        (cpu_addr[12:0] == 13'hC0F) ? {internal_dma_status[2:0], 5'b00000} :
+        // Default: ASIC RAM
+        asic_ram[cpu_addr[12:0] + 13'h2000]
+    ) :
+    (cpu_asic_ram_access && cpu_rd) ? asic_ram_q :
+    ((cpu_addr >= 16'h4000) && (cpu_addr <= 16'h7FFF) && cpu_rd) ? sdram_dout :
+    (cpu_addr[15:8] == 8'h7F || cpu_addr[15:8] == 8'hDF) ? io_dout :
+    (cpu_addr[15:8] == 8'hBC) ? acid_data_out :
+    8'hFF;
+
+// Add new wires to connect to audio module:
+wire [2:0] dma_status_audio;
+wire dma_irq_audio;
+
+// --- PSG/AY-3-8912 (YM2149) interface wires ---
+wire [7:0] psg_address;
+wire [7:0] psg_data;
+wire       psg_wr;
+wire [7:0] psg_ch_a, psg_ch_b, psg_ch_c;
+
+// --- YM2149 PSG instance ---
+YM2149 psg_inst (
+    .CLK(clk_sys),
+    .CE(1'b1), // Always enabled, or use a divided clock if needed
+    .RESET(reset),
+    .BDIR(psg_wr),
+    .BC(1'b0), // 0=write, 1=address set; you may need to add logic for address/data
+    .DI(psg_data),
+    .DO(), // Not used
+    .CHANNEL_A(psg_ch_a),
+    .CHANNEL_B(psg_ch_b),
+    .CHANNEL_C(psg_ch_c),
+    .SEL(1'b0),
+    .MODE(1'b0),
+    .ACTIVE(),
+    .IOA_in(8'hFF),
+    .IOA_out(),
+    .IOB_in(8'hFF),
+    .IOB_out()
+);
+
 endmodule 

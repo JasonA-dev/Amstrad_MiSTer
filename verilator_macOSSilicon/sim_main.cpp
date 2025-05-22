@@ -120,7 +120,7 @@ void restore_model(const char* filenamep) {
 
 // Audio
 // -----
-#define DISABLE_AUDIO
+//#define DISABLE_AUDIO
 #ifndef DISABLE_AUDIO
 SimAudio audio(clk_sys_freq, true);
 #endif
@@ -352,6 +352,11 @@ int main(int argc, char** argv, char** env) {
 		// Build your ImGui windows (control, memory, debug, etc.)
 		//---------------------------------------------------------
 
+		//ImGuiIO& io = ImGui::GetIO();
+		//ImGuiViewport* viewport = ImGui::GetMainViewport();
+		//ImGui::SetWindowPos(windowTitle_Control, viewport->Pos, ImGuiCond_Always);
+		//ImGui::SetWindowSize(windowTitle_Control, viewport->Size, ImGuiCond_Always);
+
 		ImGui::Begin(windowTitle_Control);
 		ImGui::SetWindowPos(windowTitle_Control, ImVec2(0, 0), ImGuiCond_Once);
 		ImGui::SetWindowSize(windowTitle_Control, ImVec2(500, 150), ImGuiCond_Once);
@@ -448,7 +453,7 @@ int main(int argc, char** argv, char** env) {
 		ImGui::SameLine();
 
 		ImGui::End();
-		/*
+
 		// VDP Debug window
 		ImGui::Begin("VDP Debug");
 		ImGui::SetWindowPos("VDP Debug", ImVec2(0, 710), ImGuiCond_Once);
@@ -462,32 +467,33 @@ int main(int argc, char** argv, char** env) {
 		ImGui::Text("HBlank:     0x%01X", top->VGA_HB);
 		ImGui::Text("VBlank:     0x%01X", top->VGA_VB);
 		ImGui::Separator();
-		ImGui::Text("R0_h_total:       0x%02X", top->top__DOT__sharpX1__DOT__crtc__DOT__R0_h_total);
-		ImGui::Text("R1_h_displayed:   0x%02X", top->top__DOT__sharpX1__DOT__crtc__DOT__R1_h_displayed);
-		ImGui::Text("R2_hsync_pos:     0x%02X", top->top__DOT__sharpX1__DOT__crtc__DOT__R2_h_sync_pos);
-		ImGui::Text("R3_sync_width:    0x%02X", top->top__DOT__sharpX1__DOT__crtc__DOT__R3_v_sync_width);
-		ImGui::Text("R3_h_sync_width:  0x%02X", top->top__DOT__sharpX1__DOT__crtc__DOT__R3_h_sync_width);
-		ImGui::Text("R4_v_total:       0x%02X", top->top__DOT__sharpX1__DOT__crtc__DOT__R4_v_total);
-		ImGui::Text("R5_v_total_adj:   0x%02X", top->top__DOT__sharpX1__DOT__crtc__DOT__R5_v_total_adj);
-	    ImGui::Text("R6_v_displayed:   0x%02X", top->top__DOT__sharpX1__DOT__crtc__DOT__R6_v_displayed);
-		ImGui::Text("R7_vsync_pos:     0x%02X", top->top__DOT__sharpX1__DOT__crtc__DOT__R7_v_sync_pos);
-		ImGui::Text("R8_skew:          0x%02X", top->top__DOT__sharpX1__DOT__crtc__DOT__R8_skew);
-		ImGui::Text("R8_interlace:     0x%02X", top->top__DOT__sharpX1__DOT__crtc__DOT__R8_interlace);
-		ImGui::Text("R9_v_max_line:    0x%02X", top->top__DOT__sharpX1__DOT__crtc__DOT__R9_v_max_line);
-		ImGui::Text("R10_cursor_mode:  0x%02X", top->top__DOT__sharpX1__DOT__crtc__DOT__R10_cursor_mode);
-		ImGui::Text("R10_cursor_start: 0x%02X", top->top__DOT__sharpX1__DOT__crtc__DOT__R10_cursor_start);
-		ImGui::Text("R11_cursor_end:   0x%02X", top->top__DOT__sharpX1__DOT__crtc__DOT__R11_cursor_end);
-		ImGui::Text("R12_start_addr_h: 0x%02X", top->top__DOT__sharpX1__DOT__crtc__DOT__R12_start_addr_h);
-		ImGui::Text("R13_start_addr_l: 0x%02X", top->top__DOT__sharpX1__DOT__crtc__DOT__R13_start_addr_l);
-		ImGui::Text("R14_cursor_h:     0x%02X", top->top__DOT__sharpX1__DOT__crtc__DOT__R14_cursor_h);
-		ImGui::Text("R15_cursor_l:     0x%02X", top->top__DOT__sharpX1__DOT__crtc__DOT__R15_cursor_l);
+		ImGui::Text("R0_h_total:       0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R0_h_total);
+		ImGui::Text("R1_h_displayed:   0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R1_h_displayed);
+		ImGui::Text("R2_hsync_pos:     0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R2_h_sync_pos);
+		ImGui::Text("R3_sync_width:    0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R3_v_sync_width);
+		ImGui::Text("R3_h_sync_width:  0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R3_h_sync_width);
+		ImGui::Text("R4_v_total:       0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R4_v_total);
+		ImGui::Text("R5_v_total_adj:   0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R5_v_total_adj);
+	    ImGui::Text("R6_v_displayed:   0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R6_v_displayed);
+		ImGui::Text("R7_vsync_pos:     0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R7_v_sync_pos);
+		ImGui::Text("R8_skew:          0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R8_skew);
+		ImGui::Text("R8_interlace:     0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R8_interlace);
+		ImGui::Text("R9_v_max_line:    0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R9_v_max_line);
+		ImGui::Text("R10_cursor_mode:  0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R10_cursor_mode);
+		ImGui::Text("R10_cursor_start: 0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R10_cursor_start);
+		ImGui::Text("R11_cursor_end:   0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R11_cursor_end);
+		ImGui::Text("R12_start_addr_h: 0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R12_start_addr_h);
+		ImGui::Text("R13_start_addr_l: 0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R13_start_addr_l);
+		ImGui::Text("R14_cursor_h:     0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R14_cursor_h);
+		ImGui::Text("R15_cursor_l:     0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R15_cursor_l);
 		ImGui::Separator();
 		ImGui::Text("CRTC Internal:");
-		ImGui::Text("RS:               0x%04X", top->top__DOT__sharpX1__DOT__crtc__DOT__RS);
-		ImGui::Text("Data OUT:         0x%04X", top->top__DOT__sharpX1__DOT__crtc__DOT__DO);
-		ImGui::Text("Data IN:          0x%04X", top->top__DOT__sharpX1__DOT__crtc__DOT__DI);
+		ImGui::Text("RS:               0x%04X", top->top__DOT__motherboard__DOT__CRTC__DOT__RS);
+		ImGui::Text("Data OUT:         0x%04X", top->top__DOT__motherboard__DOT__CRTC__DOT__DO);
+		ImGui::Text("Data IN:          0x%04X", top->top__DOT__motherboard__DOT__CRTC__DOT__DI);
 		ImGui::End();
-		*/
+
+
 		// Trace window
 		ImGui::Begin(windowTitle_Trace);
 		ImGui::SetWindowPos(windowTitle_Trace, ImVec2(0, 870), ImGuiCond_Once);

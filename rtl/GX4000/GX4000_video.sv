@@ -27,9 +27,9 @@ module GX4000_video
     input   [8:0] vpos,
     input         hblank,
     input         vblank,
-    input   [1:0] r_in,
-    input   [1:0] g_in,
-    input   [1:0] b_in,
+    input   [3:0] r_in,
+    input   [3:0] g_in,
+    input   [3:0] b_in,
     
     // Video output
     output reg [3:0] r_out,
@@ -84,7 +84,21 @@ module GX4000_video
     input   [7:0] config_mode,
     input   [4:0] mrer_mode,
     input   [7:0] asic_mode,
-    input         asic_enabled
+    input         asic_enabled,
+
+    output asic_video_active,
+
+    input [7:0] vram_dout,
+
+    // Add outputs for DMA trigger
+    output reg dma_hsync_pulse,
+
+    // Add registers for MAME-style HSYNC logic
+    reg [8:0] vpos; // vertical position (scanline)
+    reg [7:0] hsync_counter;
+    reg [7:0] hsync_after_vsync_counter;
+    reg [7:0] plus_irq_cause;
+    reg split_screen_event
 );
 
 // Internal signals
@@ -119,9 +133,9 @@ reg [7:0] pri_line_sync;
 reg [7:0] pri_control_sync;
 
 // Color registers
-reg [1:0] r_reg;
-reg [1:0] g_reg;
-reg [1:0] b_reg;
+reg [3:0] r_reg;
+reg [3:0] g_reg;
+reg [3:0] b_reg;
 
 // Configuration registers
 reg [7:0] config_palette;
@@ -158,6 +172,9 @@ reg [8:0] pos_v;
 
 // Sprite ASIC RAM interface
 wire [13:0] sprite_asic_ram_addr;
+wire        sprite_asic_ram_rd;
+wire        sprite_asic_ram_wr;
+wire [7:0]  sprite_asic_ram_din;
 
 // Palette registers
 reg [4:0] palette_pointer;   
@@ -167,6 +184,14 @@ reg [3:0] palette_latch_b;
 
 // Selected palette
 reg [11:0] selected_palette;
+
+// Palette bank/effect support
+reg [4:0] pal_idx;
+reg [7:0] pal_data;
+reg [13:0] pal_base;
+reg [7:0] video_data;
+reg [13:0] caddr;
+reg [11:0] color12;
 
 // Mode change registers
 reg [7:0] new_video_mode;
@@ -185,64 +210,272 @@ reg asic_hsync, asic_vsync, asic_hblank, asic_vblank;
 // Use Gate Array clock enable for timing
 wire crtc_clken_actual = cclk_en_n;
 
-// Video output generation
+// Mode-specific timing control
+reg [1:0] max_colour_ticks;  // Number of clock ticks per pixel
+reg [1:0] ticks_increment;   // How much to increment the tick counter
+reg [1:0] current_ticks;     // Current tick counter
+
+// Mode lookup tables (simplified for now)
+reg [7:0] mode0_lookup [0:15];  // Mode 0: 16 colors
+reg [7:0] mode1_lookup [0:3];   // Mode 1: 4 colors
+reg [7:0] mode2_lookup [0:1];   // Mode 2: 2 colors
+
+// Decode video_config bits
+wire alt_palette_en   = video_config[7]; // Alternate palette select
+wire effect_en        = video_config[6]; // Effect enable
+wire raster_effect_en = video_config[5]; // Raster effect enable
+wire split_screen_cfg = video_config[4]; // Split screen config
+wire palette_update_en= video_config[3]; // Palette update enable
+wire palette_bank_sel = video_config[2]; // Palette bank select
+
+// Remove duplicate mode lookup tables and keep the MAME-style ones
+// --- MAME-style mode lookup tables ---
+reg [3:0] mode_lookup_0 [0:255]; // Mode 0: 8bpp -> 16 colors
+reg [1:0] mode_lookup_1 [0:255]; // Mode 1: 8bpp -> 4 colors
+reg [0:0] mode_lookup_2 [0:255]; // Mode 2: 8bpp -> 2 colors
+
+// Video update logic registers
+reg [7:0] color_ticks;
+reg [7:0] max_color_ticks;
+reg [7:0] ticks;
+reg [7:0] hscroll;
+reg hsync_first_tick;
+reg [7:0] hsync_tick_count;
+reg [15:0] color;
+
+// Palette fetch state machine states
+localparam PF_IDLE      = 2'b00;
+localparam PF_SET_ADDR  = 2'b01;
+localparam PF_WAIT_DATA = 2'b10;
+localparam PF_LATCH     = 2'b11;
+reg [1:0] pf_state;
+reg [13:0] pf_addr;
+reg [7:0] pf_pal_idx;
+reg [15:0] pf_color_latch;
+
+// Add a reg to select the source of asic_ram_addr
+reg asic_ram_addr_sel; // 0: palette fetch, 1: sprite
+
+// Registers for DE edge logic
+reg prev_crtc_de;
+reg [13:0] de_ma_latch;
+reg [4:0] de_ra_latch;
+reg hsync_first_tick;
+reg [7:0] hsync_tick_count;
+reg [7:0] h_start;
+reg [7:0] h_end;
+reg de_start;
+reg [7:0] hscroll;
+reg [15:0] border_color;
+reg [15:0] split_ma_base;
+reg [15:0] split_ma_started;
+reg sprite_update_req;
+
+// Initialize mode lookup tables
+initial begin
+    for (integer i = 0; i < 256; i = i + 1) begin
+        mode_lookup_0[i] = ((i & 8'h80) >> 7) | ((i & 8'h20) >> 3) | ((i & 8'h08) >> 2) | ((i & 8'h02) << 2);
+        mode_lookup_1[i] = ((i & 8'h80) >> 7) | ((i & 8'h08) >> 2);
+        mode_lookup_2[i] = ((i & 8'h80) >> 7);
+    end
+end
+
+// Video mode handling
+always @(posedge clk_sys) begin
+    if (reset) begin
+        max_color_ticks <= 8'h00;
+        ticks_increment <= 8'h01;
+        ticks <= 8'h00;
+        color_ticks <= 8'h00;
+        hscroll <= 8'h00;
+        hsync_first_tick <= 1'b0;
+        hsync_tick_count <= 8'h00;
+        color <= 16'h0000;
+        video_data <= 8'h00;
+    end else if (cpu_wr && cpu_addr[15:8] == 8'hBC) begin
+        if (cpu_addr[0] == 0) begin
+            case (cpu_data[4:0])
+                5'h01: begin
+                    // Set mode-specific timing based on MRER[1:0]
+                    case (cpu_data[1:0])
+                        2'b00: begin  // Mode 0: 160x200, 16 colours
+                            max_color_ticks <= 8'h03;  // 4 ticks
+                            ticks_increment <= 8'h01;   // Increment by 1
+                        end
+                        2'b01: begin  // Mode 1: 320x200, 4 colours
+                            max_color_ticks <= 8'h01;  // 2 ticks
+                            ticks_increment <= 8'h01;   // Increment by 1
+                        end
+                        2'b10: begin  // Mode 2: 640x200, 2 colours
+                            max_color_ticks <= 8'h00;  // 1 tick
+                            ticks_increment <= 8'h01;   // Increment by 1
+                        end
+                        2'b11: begin  // Mode 3: 160x200, 4 colours
+                            max_color_ticks <= 8'h03;  // 4 ticks
+                            ticks_increment <= 8'h01;   // Increment by 1
+                        end
+                    endcase
+                end
+            endcase
+        end
+    end
+end
+
+// Video update logic
+always @(posedge clk_sys) begin
+    if (reset) begin
+        color_ticks <= 8'h00;
+        ticks <= 8'h00;
+        hscroll <= 8'h00;
+        hsync_first_tick <= 1'b0;
+        hsync_tick_count <= 8'h00;
+        color <= 16'h0000;
+        video_data <= 8'h00;
+    end else if (crtc_clken_actual) begin
+        // HSync first tick detection
+        if (crtc_hsync) begin
+            hsync_tick_count <= hsync_tick_count + 1;
+            if (hsync_tick_count > 16) begin
+                hsync_first_tick <= 1'b0;
+            end else begin
+                hsync_first_tick <= 1'b1;
+            end
+        end else begin
+            hsync_tick_count <= 8'h00;
+        end
+
+        if (!crtc_de) begin
+            // During blanking, use border color
+            color <= {asic_ram_q[7:0], asic_ram_q[15:8]}; // Little endian
+        end else begin
+            if (hscroll != 0) begin
+                hscroll <= hscroll - 1;
+                if (hscroll == 0) begin
+                    // Get new video data when scroll completes
+                    video_data <= vram_dout;
+                end
+            end else begin
+                color_ticks <= color_ticks - 1;
+                if (color_ticks == 0) begin
+                    // Shift data and get new color
+                    video_data <= {video_data[6:0], 1'b0};
+                    // Palette fetch state machine will handle color fetch
+                end
+                
+                ticks <= ticks + ticks_increment;
+                case (ticks)
+                    8'h08: begin
+                        // Get new video data
+                        video_data <= vram_dout;
+                        // Palette fetch state machine will handle color fetch
+                    end
+                    8'h10: begin
+                        // Increment memory address and get new video data
+                        // crtc_ma <= crtc_ma + 1; // You cannot assign to input
+                        video_data <= vram_dout;
+                    end
+                endcase
+            end
+        end
+    end
+end
+
+// Palette fetch state machine
+always @(posedge clk_sys) begin
+    if (reset) begin
+        pf_state <= PF_IDLE;
+        pf_addr <= 14'h0000;
+        pf_pal_idx <= 8'h00;
+        pf_color_latch <= 16'h0000;
+        color <= 16'h0000;
+        asic_ram_addr_sel <= 1'b0;
+    end else if (crtc_clken_actual) begin
+        case (pf_state)
+            PF_IDLE: begin
+                if (crtc_de) begin
+                    // Calculate palette index based on mode
+                    case (mrer_mode[1:0])
+                        2'b00: pf_pal_idx <= mode_lookup_0[video_data];
+                        2'b01: pf_pal_idx <= mode_lookup_1[video_data];
+                        2'b10: pf_pal_idx <= mode_lookup_2[video_data];
+                        default: pf_pal_idx <= mode_lookup_0[video_data];
+                    endcase
+                    pf_addr <= 14'h2400 + pf_pal_idx * 2; // Palette base + index * 2
+                    pf_state <= PF_SET_ADDR;
+                end else begin
+                    // Blanking: use border color (assume border at 0x2420)
+                    pf_addr <= 14'h2420;
+                    pf_state <= PF_SET_ADDR;
+                end
+            end
+            PF_SET_ADDR: begin
+                asic_ram_addr_sel <= 1'b0;
+                pf_state <= PF_WAIT_DATA;
+            end
+            PF_WAIT_DATA: begin
+                // Latch color low byte, set up for high byte
+                pf_color_latch[7:0] <= asic_ram_q;
+                asic_ram_addr_sel <= 1'b0;
+                pf_state <= PF_LATCH;
+            end
+            PF_LATCH: begin
+                // Latch color high byte
+                pf_color_latch[15:8] <= asic_ram_q;
+                color <= pf_color_latch;
+                pf_state <= PF_IDLE;
+            end
+        endcase
+    end
+end
+
+// Update color output based on fetched color and effects
 always @(posedge clk_sys) begin
     if (reset) begin
         r_out <= 4'h0;
         g_out <= 4'h0;
         b_out <= 4'h0;
-    end else if (cclk_en_n) begin
+    end else if (crtc_clken_actual) begin
         if (crtc_de) begin
-            case (config_mode)
-                8'h00: begin
-                    // Standard CPC mode - use Gate Array colors directly
-                    r_out <= {2'b00, r_in};
-                    g_out <= {2'b00, g_in};
-                    b_out <= {2'b00, b_in};
-                end
-                default: begin
-                    if (plus_mode && asic_enabled) begin
+            if (effect_en) begin
+                // Apply effects if enabled
+                r_out <= ~color[11:8];
+                g_out <= ~color[7:4];
+                b_out <= ~color[3:0];
+            end else if (plus_mode && asic_enabled) begin
                         case (asic_mode)
                             8'h02: begin
-                                // Mode 0x02: Standard Plus mode with palette
-                                r_out <= palette_latch_r;
-                                g_out <= palette_latch_g;
-                                b_out <= palette_latch_b;
+                        r_out <= color[11:8];
+                        g_out <= color[7:4];
+                        b_out <= color[3:0];
                             end
                             8'h62: begin
-                                // Mode 0x62: Enhanced Plus mode with sprite priority
                                 if (sprite_active_wire) begin
-                                    r_out <= palette_latch_r;
-                                    g_out <= palette_latch_g;
-                                    b_out <= palette_latch_b;
+                            r_out <= color[11:8];
+                            g_out <= color[7:4];
+                            b_out <= color[3:0];
                                 end else begin
-                                    r_out <= {2'b00, r_in};
-                                    g_out <= {2'b00, g_in};
-                                    b_out <= {2'b00, b_in};
+                            r_out <= r_in;
+                            g_out <= g_in;
+                            b_out <= b_in;
                                 end
                             end
                             8'h82: begin
-                                // Mode 0x82: Advanced Plus mode with alpha blending
-                                r_out <= (palette_latch_r + {2'b00, r_in}) >> 1;
-                                g_out <= (palette_latch_g + {2'b00, g_in}) >> 1;
-                                b_out <= (palette_latch_b + {2'b00, b_in}) >> 1;
+                        r_out <= (color[11:8] + r_in) >> 1;
+                        g_out <= (color[7:4] + g_in) >> 1;
+                        b_out <= (color[3:0] + b_in) >> 1;
                             end
                             default: begin
-                                r_out <= palette_latch_r;
-                                g_out <= palette_latch_g;
-                                b_out <= palette_latch_b;
+                        r_out <= color[11:8];
+                        g_out <= color[7:4];
+                        b_out <= color[3:0];
                             end
                         endcase
                     end else begin
-                        // Non-Plus mode or ASIC not enabled: Direct 2-bit per channel
-                        r_out <= {2'b00, r_in};
-                        g_out <= {2'b00, g_in};
-                        b_out <= {2'b00, b_in};
+                r_out <= r_in;
+                g_out <= g_in;
+                b_out <= b_in;
                     end
-                end
-            endcase
         end else begin
-            // Blanking: Output black
             r_out <= 4'h0;
             g_out <= 4'h0;
             b_out <= 4'h0;
@@ -266,9 +499,9 @@ initial begin
     split_addr_sync = 16'h0000;
     pri_line_sync = 8'h00;
     pri_control_sync = 8'h00;
-    r_reg = 2'b00;
-    g_reg = 2'b00;
-    b_reg = 2'b00;
+    r_reg = 4'b0000;
+    g_reg = 4'b0000;
+    b_reg = 4'b0000;
     config_palette = 8'h00;
     config_sprite = 8'h00;
     config_video = 8'h00;
@@ -303,9 +536,28 @@ initial begin
     asic_vsync = 0;
     asic_hblank = 0;
     asic_vblank = 0;
+    vpos <= 0;
+    hsync_counter <= 0;
+    hsync_after_vsync_counter <= 0;
+    plus_irq_cause <= 0;
+    split_screen_event <= 0;
+    dma_hsync_pulse <= 0;
+    prev_crtc_de <= 0;
+    de_ma_latch <= 0;
+    de_ra_latch <= 0;
+    hsync_first_tick <= 0;
+    hsync_tick_count <= 0;
+    h_start <= 0;
+    h_end <= 0;
+    de_start <= 0;
+    hscroll <= 0;
+    border_color <= 0;
+    split_ma_base <= 0;
+    split_ma_started <= 0;
+    sprite_update_req <= 0;
 end
 
-// Register handling logic
+// CRTC and Gate Array register handling logic
 always @(posedge clk_sys) begin
     if (reset) begin
         // Reset all ASIC registers
@@ -322,62 +574,18 @@ always @(posedge clk_sys) begin
 
         // Handle CRTC register writes (0xBCxx)
         if (cpu_wr && cpu_addr[15:8] == 8'hBC) begin
-            crtc_reg_wr <= 1'b1;
+                    crtc_reg_wr <= 1'b1;
             crtc_reg_sel <= cpu_addr[3:0];  // Use lower bits for register select
-            crtc_reg_data <= cpu_data;
-        end
-        
+                    crtc_reg_data <= cpu_data;
+                end
+                
         // Handle Gate Array register writes (0xBDxx)
         else if (cpu_wr && cpu_addr[15:8] == 8'hBD) begin
-            ga_reg_wr <= 1'b1;
+                    ga_reg_wr <= 1'b1;
             ga_reg_sel <= cpu_addr[3:0];  // Use lower bits for register select
-            ga_reg_data <= cpu_data;
-        end
+                    ga_reg_data <= cpu_data;
+                end
         
-        // Handle ASIC register writes (0x7Fxx)
-        else if (cpu_wr && cpu_addr[15:8] == 8'h7F) begin
-            case (cpu_addr[7:0])
-                // ASIC Control Registers
-                8'h00: begin
-                    // Handle ASIC control register writes
-                end
-                // ... handle other ASIC register writes ...
-            endcase
-        end
-    end
-end
-
-// Palette handling
-always @(posedge clk_sys) begin
-    if (reset) begin
-        palette_pointer <= 5'h00;
-        palette_latch_r <= 4'h0;
-        palette_latch_g <= 4'h0;
-        palette_latch_b <= 4'h0;
-    end else if (crtc_clken_actual) begin
-        if (crtc_de) begin
-            palette_pointer <= {crtc_ra[2:0], crtc_ma[1:0]};
-        end
-
-        // Only use ASIC palette if MRER[0] is set, as on real hardware
-        if (plus_mode && asic_enabled && mrer_mode[0]) begin
-            case (asic_mode)
-                8'h02, 8'h62, 8'h82: begin
-                    palette_latch_r <= {2'b00, asic_ram_q[1:0]};
-                    palette_latch_g <= {2'b00, asic_ram_q[3:2]};
-                    palette_latch_b <= {2'b00, asic_ram_q[5:4]};
-                end
-                default: begin
-                    palette_latch_r <= {2'b00, r_in};
-                    palette_latch_g <= {2'b00, g_in};
-                    palette_latch_b <= {2'b00, b_in};
-                end
-            endcase
-        end else begin
-            palette_latch_r <= {2'b00, r_in};
-            palette_latch_g <= {2'b00, g_in};
-            palette_latch_b <= {2'b00, b_in};
-        end
     end
 end
 
@@ -414,6 +622,8 @@ GX4000_sprite sprite_inst (
     .asic_ram_wr(sprite_asic_ram_wr),
     .asic_ram_din(sprite_asic_ram_din)
 );
+
+assign asic_video_active = (asic_enabled && (asic_mode != 8'h00));
 
 // Connect sprite outputs
 assign sprite_active_out = sprite_active_wire;
@@ -494,15 +704,146 @@ always @(posedge clk_sys) begin
     end
 end
 
-// Local parameters
-localparam SPRITE_ATTR_BASE = 14'h0000;    // Sprite attributes start at 0x0000
-localparam SPRITE_PATTERN_BASE = 14'h0200;  // Sprite patterns start at 0x0200
-localparam SPRITE_ATTR_SIZE = 14'h0020;     // 32 bytes for 16 sprites
-localparam SPRITE_PATTERN_SIZE = 14'h0100;  // 256 bytes per sprite pattern
+// In your palette fetch state machine and sprite logic, set asic_ram_addr_sel accordingly
+// For example, when palette fetch is active, set asic_ram_addr_sel = 0; when sprite is active, set asic_ram_addr_sel = 1;
 
-assign asic_ram_addr = sprite_asic_ram_addr;
+// Connect asic_ram_addr to the selected source
+always @(*) begin
+    if (asic_ram_addr_sel)
+        asic_ram_addr = sprite_asic_ram_addr;
+    else
+        asic_ram_addr = pf_addr;
+end
+
 assign asic_ram_rd   = sprite_asic_ram_rd;
 assign asic_ram_wr   = sprite_asic_ram_wr;
 assign asic_ram_din  = sprite_asic_ram_din;
+
+// HSYNC edge detection
+reg prev_crtc_hsync;
+always @(posedge clk_sys) begin
+    if (reset) begin
+        prev_crtc_hsync <= 1'b0;
+    end else if (crtc_clken_actual) begin
+        prev_crtc_hsync <= crtc_hsync;
+    end
+end
+
+// Main HSYNC logic
+always @(posedge clk_sys) begin
+    if (reset) begin
+        vpos <= 0;
+        hsync_counter <= 0;
+        hsync_after_vsync_counter <= 0;
+        plus_irq_cause <= 0;
+        split_screen_event <= 0;
+        dma_hsync_pulse <= 0;
+    end else if (crtc_clken_actual) begin
+        dma_hsync_pulse <= 0; // default
+        split_screen_event <= 0; // default
+        // Detect falling edge of HSYNC
+        if (prev_crtc_hsync && !crtc_hsync) begin
+            // Advance to next drawing line
+            hsync_counter <= hsync_counter + 1;
+            vpos <= vpos + 1;
+            // Reset line_ticks (not explicitly tracked)
+            // Split screen event
+            if (split_line != 0 && split_line == vpos - 1) begin
+                split_screen_event <= 1;
+                // Optionally: trigger split screen logic here
+            end
+            // PRI (Programmable Raster Interrupt)
+            if (pri_line != 0 && pri_line == vpos) begin
+                pri_irq <= 1;
+                plus_irq_cause <= 8'h06; // raster interrupt vector
+                hsync_counter <= hsync_counter & ~8'h20; // reset MSB
+            end
+            // Raster interrupt timing
+            if (hsync_after_vsync_counter != 0) begin
+                hsync_after_vsync_counter <= hsync_after_vsync_counter - 1;
+                if (hsync_after_vsync_counter == 1) begin // will become 0
+                    if (hsync_counter >= 32) begin
+                        if (pri_line == 0 || !asic_enabled) begin
+                            pri_irq <= 1;
+                        end
+                    end
+                    hsync_counter <= 0;
+                end
+            end
+            if (hsync_counter >= 52) begin
+                hsync_counter <= 0;
+                if (pri_line == 0 || !asic_enabled) begin
+                    pri_irq <= 1;
+                end
+            end
+            // DMA trigger
+            dma_hsync_pulse <= 1;
+        end
+        // VSYNC handling (reset vpos at start of frame)
+        if (crtc_vsync && !vsync_prev) begin
+            vpos <= 0;
+            hsync_after_vsync_counter <= 0; // or set to initial value if needed
+        end
+    end
+end
+
+// DE edge detection and logic
+always @(posedge clk_sys) begin
+    if (reset) begin
+        prev_crtc_de <= 0;
+        de_ma_latch <= 0;
+        de_ra_latch <= 0;
+        hsync_first_tick <= 0;
+        hsync_tick_count <= 0;
+        h_start <= 0;
+        h_end <= 0;
+        de_start <= 0;
+        hscroll <= 0;
+        border_color <= 0;
+        split_ma_base <= 0;
+        split_ma_started <= 0;
+        sprite_update_req <= 0;
+    end else if (crtc_clken_actual) begin
+        prev_crtc_de <= crtc_de;
+        sprite_update_req <= 0; // default
+        // Rising edge of DE
+        if (!prev_crtc_de && crtc_de) begin
+            // Latch MA/RA
+            de_ma_latch <= crtc_ma;
+            de_ra_latch <= crtc_ra;
+            // Set hsync_first_tick and hsync_tick_count
+            hsync_first_tick <= 1;
+            hsync_tick_count <= 0;
+            h_start <= 0; // You may want to use a pixel counter here
+            // Handle de_start/vpos
+            if (de_start == 0) begin
+                vpos <= 0;
+            end
+            de_start <= 1;
+            // Fetch border color from ASIC RAM (simulate fetch, use asic_ram_q if needed)
+            border_color <= {asic_ram_q, asic_ram_q}; // Placeholder: real fetch needs sequencing
+            // Fetch hscroll from ASIC RAM (simulate fetch, use asic_ram_q if needed)
+            hscroll <= asic_ram_q & 8'h0F; // Placeholder: real fetch needs sequencing
+            if (hscroll == 0) begin
+                // Fetch new video data (handled elsewhere)
+            end
+            // Start of screen
+            if (vpos == 0) begin
+                split_ma_base <= 16'h0000;
+                split_ma_started <= 16'h0000;
+            end
+            // Start of split screen section
+            else if (asic_enabled && asic_ram_q != 0 && asic_ram_q == vpos - 1) begin
+                split_ma_started <= de_ma_latch;
+                split_ma_base <= {asic_ram_q, asic_ram_q}; // Placeholder: real fetch needs sequencing
+            end
+        end
+        // Falling edge of DE
+        if (prev_crtc_de && !crtc_de) begin
+            h_end <= 0; // You may want to use a pixel counter here
+            sprite_update_req <= 1; // Trigger sprite update
+        end
+    end
+end
 
 endmodule 

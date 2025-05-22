@@ -306,7 +306,7 @@ always @(posedge clk_sys) begin
             if (sprite_download_offset == 8'hFF) begin
                 sprite_download_id <= sprite_download_id + 1'b1;
                 sprite_download_offset <= 8'h00;
-            end
+        end
         end
         // Handle sprite attribute downloads
         else if (cpu_wr && (cpu_addr[15:8] == 8'h60) && (cpu_addr[7:5] < 4'h2)) begin
