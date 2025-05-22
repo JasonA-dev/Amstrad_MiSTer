@@ -81,7 +81,14 @@ module Amstrad_motherboard
 	output        m1,
 	input         irq,
 	input         nmi,
-	output        cursor
+	output        cursor,
+
+	// CRTC register write interface from PlusMode
+	input         plus_crtc_enable,
+	input         plus_crtc_cs_n,
+	input         plus_crtc_r_nw,
+	input         plus_crtc_rs,
+	input   [7:0] plus_crtc_data
 );
 
 wire crtc_shift;
@@ -126,12 +133,20 @@ UM6845R CRTC
 	.nCLKEN(cclk_en_p),
 	.nRESET(~reset),
 	.CRTC_TYPE(crtc_type),
-
-	.ENABLE(io_rd | io_wr),
+	.plus_mode(plus_mode),
+	.ENABLE((io_rd | io_wr)),
 	.nCS(A[14]),
 	.R_nW(A[9]),
 	.RS(A[8]),
-	.DI(~RD_n ? 8'hFF : D),
+	.DI((~RD_n ? 8'hFF : D)),
+
+	// CRTC register write interface from PlusMode
+	.plus_crtc_enable(plus_crtc_enable),
+	.plus_crtc_cs_n(plus_crtc_cs_n),
+	.plus_crtc_r_nw(plus_crtc_r_nw),
+	.plus_crtc_rs(plus_crtc_rs),
+	.plus_crtc_data(plus_crtc_data),
+
 	.DO(crtc_dout),
 
 	.VSYNC(crtc_vs),

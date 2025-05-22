@@ -125,10 +125,10 @@ module PlusMode
     
     // Connect CRTC interface signals
     assign crtc_enable = crtc_reg_wr;
-    assign crtc_cs_n = ~crtc_reg_wr;
-    assign crtc_r_nw = ~crtc_reg_wr;
-    assign crtc_rs = crtc_reg_sel[0];
-    assign crtc_data = crtc_reg_data;
+    assign crtc_cs_n = ~(cpu_addr[15:8] == 8'hBC);  // Active low chip select for BC addresses
+    assign crtc_r_nw = ~cpu_wr;  // Active low write signal
+    assign crtc_rs = cpu_addr[0];  // Register select from address bit 0
+    assign crtc_data = cpu_data_in;  // Use cpu_data_in for writes
 
     // Connect ASIC sync signals
     assign asic_hsync_in = hsync;

@@ -39,7 +39,15 @@ module UM6845R
 	output           CURSOR,
 
 	output    [13:0] MA,
-	output     [4:0] RA
+	output     [4:0] RA,
+
+	input            plus_mode,
+
+	input            plus_crtc_enable,
+	input            plus_crtc_cs_n,
+	input            plus_crtc_r_nw,
+	input            plus_crtc_rs,
+	input      [7:0] plus_crtc_data
 );
 
 /* verilator lint_off WIDTH */

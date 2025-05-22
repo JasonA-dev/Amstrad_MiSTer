@@ -438,7 +438,14 @@ Amstrad_motherboard motherboard
     .m1(m1),
     .irq(IRQ),
     .nmi(NMI),
-    .cursor(cursor)
+    .cursor(cursor),
+
+    // New CRTC register write interface from PlusMode
+    .plus_crtc_enable(crtc_enable),
+    .plus_crtc_cs_n(crtc_cs_n),
+    .plus_crtc_r_nw(crtc_r_nw),
+    .plus_crtc_rs(crtc_rs),
+    .plus_crtc_data(crtc_data)
 );
 
 // PlusMode instance (handles all Plus mode functionality)
@@ -480,11 +487,11 @@ PlusMode cart_inst
     .crtc_hsync(crtc_hs),
 
     // CRTC register write interface to motherboard
-    .crtc_enable(),
-    .crtc_cs_n(),
-    .crtc_r_nw(),
-    .crtc_rs(),
-    .crtc_data(),
+    .crtc_enable(crtc_enable),
+    .crtc_cs_n(crtc_cs_n),
+    .crtc_r_nw(crtc_r_nw),
+    .crtc_rs(crtc_rs),
+    .crtc_data(crtc_data),
 
     // Audio interface
     .cpc_audio_l(audio_l),

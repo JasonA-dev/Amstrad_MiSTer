@@ -316,105 +316,33 @@ always @(posedge clk_sys) begin
         ga_reg_sel <= 4'b0000;
         ga_reg_data <= 8'h00;
     end else begin
-        // Handle register writes
-        if (cpu_wr && cpu_addr[15:8] == 8'h7F) begin
+        // Default - clear write signals
+        crtc_reg_wr <= 1'b0;
+        ga_reg_wr <= 1'b0;
+
+        // Handle CRTC register writes (0xBCxx)
+        if (cpu_wr && cpu_addr[15:8] == 8'hBC) begin
+            crtc_reg_wr <= 1'b1;
+            crtc_reg_sel <= cpu_addr[3:0];  // Use lower bits for register select
+            crtc_reg_data <= cpu_data;
+        end
+        
+        // Handle Gate Array register writes (0xBDxx)
+        else if (cpu_wr && cpu_addr[15:8] == 8'hBD) begin
+            ga_reg_wr <= 1'b1;
+            ga_reg_sel <= cpu_addr[3:0];  // Use lower bits for register select
+            ga_reg_data <= cpu_data;
+        end
+        
+        // Handle ASIC register writes (0x7Fxx)
+        else if (cpu_wr && cpu_addr[15:8] == 8'h7F) begin
             case (cpu_addr[7:0])
                 // ASIC Control Registers
                 8'h00: begin
-                    crtc_reg_wr <= 1'b1;
-                    crtc_reg_sel <= 4'h0;
-                    crtc_reg_data <= cpu_data;
+                    // Handle ASIC control register writes
                 end
-                8'h01: begin
-                    crtc_reg_wr <= 1'b1;
-                    crtc_reg_sel <= 4'h1;
-                    crtc_reg_data <= cpu_data;
-                end
-                8'h02: begin
-                    crtc_reg_wr <= 1'b1;
-                    crtc_reg_sel <= 4'h2;
-                    crtc_reg_data <= cpu_data;
-                end
-                
-                // Video Control Registers
-                8'h10: begin
-                    ga_reg_wr <= 1'b1;
-                    ga_reg_sel <= 4'h0;
-                    ga_reg_data <= cpu_data;
-                end
-                8'h11: begin
-                    ga_reg_wr <= 1'b1;
-                    ga_reg_sel <= 4'h1;
-                    ga_reg_data <= cpu_data;
-                end
-                8'h12: begin
-                    ga_reg_wr <= 1'b1;
-                    ga_reg_sel <= 4'h2;
-                    ga_reg_data <= cpu_data;
-                end
-                8'h13: begin
-                    ga_reg_wr <= 1'b1;
-                    ga_reg_sel <= 4'h3;
-                    ga_reg_data <= cpu_data;
-                end
-                8'h14: begin
-                    ga_reg_wr <= 1'b1;
-                    ga_reg_sel <= 4'h4;
-                    ga_reg_data <= cpu_data;
-                end
-                
-                // Sprite Control Registers
-                8'h20: begin
-                    ga_reg_wr <= 1'b1;
-                    ga_reg_sel <= 4'h5;
-                    ga_reg_data <= cpu_data;
-                end
-                8'h21: begin
-                    ga_reg_wr <= 1'b1;
-                    ga_reg_sel <= 4'h6;
-                    ga_reg_data <= cpu_data;
-                end
-                8'h22: begin
-                    ga_reg_wr <= 1'b1;
-                    ga_reg_sel <= 4'h7;
-                    ga_reg_data <= cpu_data;
-                end
-                8'h23: begin
-                    ga_reg_wr <= 1'b1;
-                    ga_reg_sel <= 4'h8;
-                    ga_reg_data <= cpu_data;
-                end
-                8'h24: begin
-                    ga_reg_wr <= 1'b1;
-                    ga_reg_sel <= 4'h9;
-                    ga_reg_data <= cpu_data;
-                end
-                
-                // Audio Control Registers
-                8'h30: begin
-                    ga_reg_wr <= 1'b1;
-                    ga_reg_sel <= 4'ha;
-                    ga_reg_data <= cpu_data;
-                end
-                8'h31: begin
-                    ga_reg_wr <= 1'b1;
-                    ga_reg_sel <= 4'hb;
-                    ga_reg_data <= cpu_data;
-                end
-                8'h32: begin
-                    ga_reg_wr <= 1'b1;
-                    ga_reg_sel <= 4'hc;
-                    ga_reg_data <= cpu_data;
-                end
-                8'h33: begin
-                    ga_reg_wr <= 1'b1;
-                    ga_reg_sel <= 4'hd;
-                    ga_reg_data <= cpu_data;
-                end
+                // ... handle other ASIC register writes ...
             endcase
-        end else begin
-            crtc_reg_wr <= 1'b0;
-            ga_reg_wr <= 1'b0;
         end
     end
 end
