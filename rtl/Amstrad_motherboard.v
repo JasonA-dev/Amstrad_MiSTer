@@ -361,6 +361,56 @@ hid HID
 	.Fn(Fn)
 );
 
+
+`ifdef VERILATOR
+tv80s CPU
+(
+	.reset_n(~reset),
+	.clk(clk),
+	.cen(phi_en_p),
+	.wait_n(ready | (IORQ_n & MREQ_n) | no_wait),
+	.int_n(INT_n & ~irq & ~pri_irq),  // Add PRI interrupt to CPU interrupt
+	.nmi_n(~nmi),
+	.busrq_n(1),
+	.m1_n(M1_n),
+	.mreq_n(MREQ_n),
+	.iorq_n(IORQ_n),
+	.rd_n(RD_n),
+	.wr_n(WR_n),
+	.rfsh_n(RFSH_n),
+	.halt_n(),
+	.busak_n(),
+	.A(A),
+	.di(crtc_dout & ppi_dout & cpu_din),
+	.dout(D)
+);
+`else
+T80pa CPU
+(
+	.reset_n(~reset),
+	
+	.clk(clk),
+	.cen_p(phi_en_p),
+	.cen_n(phi_en_n),
+
+	.a(A),
+	.do(D),
+	.di(crtc_dout & ppi_dout & cpu_din),
+
+	.rd_n(RD_n),
+	.wr_n(WR_n),
+	.iorq_n(IORQ_n),
+	.mreq_n(MREQ_n),
+	.m1_n(M1_n),
+	.rfsh_n(RFSH_n),
+
+	.busrq_n(1),
+	.int_n(INT_n & ~irq & ~pri_irq),  // Add PRI interrupt to CPU interrupt
+	.nmi_n(~nmi),
+	.wait_n(ready | (IORQ_n & MREQ_n) | no_wait)
+);
+`endif
+
 // Data input multiplexing
 assign di = ~RD_n ? (  // When reading
     ~IORQ_n ? (        // I/O read

@@ -2,7 +2,7 @@ module GX4000_cartridge
 (
     input         clk_sys,
     input         reset,
-    input         plus_mode,      // Plus mode input
+    input         plus_mode,      
     
     // Cartridge interface
     output [24:0] cart_addr,
@@ -29,7 +29,7 @@ module GX4000_cartridge
     output [15:0] boot_addr,
     
     // Plus ROM validation outputs
-    output reg    plus_bios_valid,
+    output reg        plus_bios_valid,
     output reg [15:0] plus_bios_checksum,
     output reg [7:0]  plus_bios_version,
     
@@ -51,7 +51,7 @@ localparam MAX_BLOCK_SIZE = 16384; // Maximum size of a cartridge block
 localparam RIFF_SIG = 32'h46464952;  // "RIFF" in little-endian
 localparam AMS_SIG = 32'h414d5321;   // "Ams!" in little-endian
 localparam FMT_SIG = 32'h666d7420;   // "fmt " in little-endian
-localparam CB_PREFIX = 24'h6362;   // "cb" in little-endian
+localparam CB_PREFIX = 24'h6362;     // "cb" in little-endian
 
 // State machine states
 localparam 
@@ -467,34 +467,7 @@ always @(posedge clk_sys) begin
                 protection_state <= P_DETECTING;
                 $display("[ACID] Protection pattern detected: %h", rom_q);
             end
-        end
-/*
-        // Monitor CRTC register access
-        if (cart_addr[15:8] == 8'hBC) begin
-            reg [7:0] reg_num = cart_addr[7:0];
-            case (reg_num)
-                8'h00: $display("[ACID] CRTC: R0 (Horizontal Total) = %h", cart_data);
-                8'h01: $display("[ACID] CRTC: R1 (Horizontal Displayed) = %h", cart_data);
-                8'h02: $display("[ACID] CRTC: R2 (Horizontal Sync Position) = %h", cart_data);
-                8'h03: $display("[ACID] CRTC: R3 (Sync Widths) = %h", cart_data);
-                8'h04: $display("[ACID] CRTC: R4 (Vertical Total) = %h", cart_data);
-                8'h05: $display("[ACID] CRTC: R5 (Vertical Total Adjust) = %h", cart_data);
-                8'h06: $display("[ACID] CRTC: R6 (Vertical Displayed) = %h", cart_data);
-                8'h07: $display("[ACID] CRTC: R7 (Vertical Sync Position) = %h", cart_data);
-                8'h08: $display("[ACID] CRTC: R8 (Interlace & Skew) = %h", cart_data);
-                8'h09: $display("[ACID] CRTC: R9 (Maximum Raster) = %h", cart_data);
-                8'h0A: $display("[ACID] CRTC: R10 (Cursor Start) = %h", cart_data);
-                8'h0B: $display("[ACID] CRTC: R11 (Cursor End) = %h", cart_data);
-                8'h0C: $display("[ACID] CRTC: R12 (Start Address High) = %h", cart_data);
-                8'h0D: $display("[ACID] CRTC: R13 (Start Address Low) = %h", cart_data);
-                8'h0E: $display("[ACID] CRTC: R14 (Cursor Address High) = %h", cart_data);
-                8'h0F: $display("[ACID] CRTC: R15 (Cursor Address Low) = %h", cart_data);
-                8'h10: $display("[ACID] CRTC: R16 (Light Pen High) = %h", cart_data);
-                8'h11: $display("[ACID] CRTC: R17 (Light Pen Low) = %h", cart_data);
-                default: $display("[ACID] CRTC: Unknown register %h = %h", reg_num, cart_data);
-            endcase
-        end
-  */   
+        end 
         // Protection state machine
         case (protection_state)
             P_IDLE: begin

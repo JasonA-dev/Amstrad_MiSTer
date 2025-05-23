@@ -410,6 +410,10 @@ int main(int argc, char** argv, char** env) {
 				mem_edit.DrawContents(&top->top__DOT__cart_inst__DOT__asic_ram[0], 16384, 0); // 16K
 				ImGui::EndTabItem();
 			}
+			if (ImGui::BeginTabItem("VIDEO RAM (16K)")) {
+				mem_edit.DrawContents(&top->top__DOT__sdram__DOT__ram[0x3000], 16384, 0); // 16K
+				ImGui::EndTabItem();
+			}
 			ImGui::EndTabBar();
 		}
 		ImGui::End();
@@ -418,7 +422,6 @@ int main(int argc, char** argv, char** env) {
 		ImGui::Begin("CPU Debug");
 		ImGui::SetWindowPos("CPU Debug", ImVec2(0, 370), ImGuiCond_Once);
 		ImGui::SetWindowSize("CPU Debug", ImVec2(500, 200), ImGuiCond_Once);
-
 		ImGui::Text("Control Signals:");
 		ImGui::Text("M1_n:    0x%01X", top->top__DOT__motherboard__DOT__M1_n);
 		ImGui::Text("MREQ_n:  0x%01X", top->top__DOT__motherboard__DOT__MREQ_n);
@@ -426,73 +429,125 @@ int main(int argc, char** argv, char** env) {
 		ImGui::Text("INT_n:   0x%01X", top->top__DOT__motherboard__DOT__INT_n);
 		ImGui::Text("RD_n:    0x%01X", top->top__DOT__motherboard__DOT__RD_n);
 		ImGui::Text("WR_n:    0x%01X", top->top__DOT__motherboard__DOT__WR_n);
-
 		ImGui::Separator();
-
 		ImGui::Text("Data Path:");
 		ImGui::Text("Address:     0x%04X", top->top__DOT__motherboard__DOT__cpu_addr);
 		ImGui::Text("Data Out:    0x%02X", top->top__DOT__motherboard__DOT__cpu_dout);
 		ImGui::Text("Data In:     0x%02X", top->top__DOT__motherboard__DOT__cpu_din);
-
-
 		ImGui::Separator();
 		ImGui::Text("CPU Status:");
 		ImGui::Text("Reset:    0x%01X", top->top__DOT__RESET);  
 		ImGui::End();
 		
-		// Debugger window
+		/*
 		ImGui::Begin("Z80 Debugger");
-		ImGui::SetWindowPos("Z80 Debugger", ImVec2(510, 370), ImGuiCond_Once);
+		ImGui::SetWindowPos("Z80 Debugger",  ImVec2(510, 370), ImGuiCond_Once);
 		ImGui::SetWindowSize("Z80 Debugger", ImVec2(500, 300), ImGuiCond_Once);
-
-
-
 		ImGui::Separator();
-
-
 		ImGui::SameLine();
-
 		ImGui::End();
+		*/
 
 		// VDP Debug window
 		ImGui::Begin("VDP Debug");
-		ImGui::SetWindowPos("VDP Debug", ImVec2(0, 710), ImGuiCond_Once);
+		ImGui::SetWindowPos("VDP Debug",  ImVec2(0, 710), ImGuiCond_Once);
 		ImGui::SetWindowSize("VDP Debug", ImVec2(500, 200), ImGuiCond_Once);
-		ImGui::Text("Video Output:");
-		ImGui::Text("R:          0x%02X", top->VGA_R);
-		ImGui::Text("G:          0x%02X", top->VGA_G);
-		ImGui::Text("B:          0x%02X", top->VGA_B);
-		ImGui::Text("HSync:      0x%01X", top->VGA_HS);
-		ImGui::Text("VSync:      0x%01X", top->VGA_VS);
-		ImGui::Text("HBlank:     0x%01X", top->VGA_HB);
-		ImGui::Text("VBlank:     0x%01X", top->VGA_VB);
-		ImGui::Separator();
-		ImGui::Text("R0_h_total:       0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R0_h_total);
-		ImGui::Text("R1_h_displayed:   0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R1_h_displayed);
-		ImGui::Text("R2_hsync_pos:     0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R2_h_sync_pos);
-		ImGui::Text("R3_sync_width:    0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R3_v_sync_width);
-		ImGui::Text("R3_h_sync_width:  0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R3_h_sync_width);
-		ImGui::Text("R4_v_total:       0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R4_v_total);
-		ImGui::Text("R5_v_total_adj:   0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R5_v_total_adj);
-	    ImGui::Text("R6_v_displayed:   0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R6_v_displayed);
-		ImGui::Text("R7_vsync_pos:     0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R7_v_sync_pos);
-		ImGui::Text("R8_skew:          0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R8_skew);
-		ImGui::Text("R8_interlace:     0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R8_interlace);
-		ImGui::Text("R9_v_max_line:    0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R9_v_max_line);
-		ImGui::Text("R10_cursor_mode:  0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R10_cursor_mode);
-		ImGui::Text("R10_cursor_start: 0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R10_cursor_start);
-		ImGui::Text("R11_cursor_end:   0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R11_cursor_end);
-		ImGui::Text("R12_start_addr_h: 0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R12_start_addr_h);
-		ImGui::Text("R13_start_addr_l: 0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R13_start_addr_l);
-		ImGui::Text("R14_cursor_h:     0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R14_cursor_h);
-		ImGui::Text("R15_cursor_l:     0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R15_cursor_l);
-		ImGui::Separator();
-		ImGui::Text("CRTC Internal:");
-		ImGui::Text("RS:               0x%04X", top->top__DOT__motherboard__DOT__CRTC__DOT__RS);
-		ImGui::Text("Data OUT:         0x%04X", top->top__DOT__motherboard__DOT__CRTC__DOT__DO);
-		ImGui::Text("Data IN:          0x%04X", top->top__DOT__motherboard__DOT__CRTC__DOT__DI);
+		if (ImGui::BeginTabBar("VDP")) {
+			if (ImGui::BeginTabItem("Video Output")) {
+				ImGui::Text("Frame: %d", video.count_frame);
+				ImGui::Text("R:          0x%02X", top->VGA_R);
+				ImGui::Text("G:          0x%02X", top->VGA_G);
+				ImGui::Text("B:          0x%02X", top->VGA_B);
+				ImGui::Text("HSync:      0x%01X", top->VGA_HS);
+				ImGui::Text("VSync:      0x%01X", top->VGA_VS);
+				ImGui::Text("HBlank:     0x%01X", top->VGA_HB);
+				ImGui::Text("VBlank:     0x%01X", top->VGA_VB);
+				ImGui::Separator();
+				ImGui::Text("CRTC Internal:");
+				ImGui::Text("RS:               0x%04X", top->top__DOT__motherboard__DOT__CRTC__DOT__RS);
+				ImGui::Text("Data OUT:         0x%04X", top->top__DOT__motherboard__DOT__CRTC__DOT__DO);
+				ImGui::Text("Data IN:          0x%04X", top->top__DOT__motherboard__DOT__CRTC__DOT__DI);
+				ImGui::EndTabItem();
+			}
+			if (ImGui::BeginTabItem("CRTC Registers")) {
+				ImGui::Text("R0_h_total:       0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R0_h_total);
+				ImGui::Text("R1_h_displayed:   0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R1_h_displayed);
+				ImGui::Text("R2_hsync_pos:     0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R2_h_sync_pos);
+				ImGui::Text("R3_sync_width:    0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R3_v_sync_width);
+				ImGui::Text("R3_h_sync_width:  0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R3_h_sync_width);
+				ImGui::Text("R4_v_total:       0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R4_v_total);
+				ImGui::Text("R5_v_total_adj:   0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R5_v_total_adj);
+	    		ImGui::Text("R6_v_displayed:   0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R6_v_displayed);
+				ImGui::Text("R7_vsync_pos:     0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R7_v_sync_pos);
+				ImGui::Text("R8_skew:          0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R8_skew);
+				ImGui::Text("R8_interlace:     0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R8_interlace);
+				ImGui::Text("R9_v_max_line:    0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R9_v_max_line);
+				ImGui::Text("R10_cursor_mode:  0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R10_cursor_mode);
+				ImGui::Text("R10_cursor_start: 0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R10_cursor_start);
+				ImGui::Text("R11_cursor_end:   0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R11_cursor_end);
+				ImGui::Text("R12_start_addr_h: 0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R12_start_addr_h);
+				ImGui::Text("R13_start_addr_l: 0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R13_start_addr_l);
+				ImGui::Text("R14_cursor_h:     0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R14_cursor_h);
+				ImGui::Text("R15_cursor_l:     0x%02X", top->top__DOT__motherboard__DOT__CRTC__DOT__R15_cursor_l);
+				ImGui::EndTabItem();
+			}
+			ImGui::EndTabBar();
+		}
 		ImGui::End();
 
+		// ASIC Debug window
+		ImGui::Begin("ASIC Debug");
+		ImGui::SetWindowPos("ASIC Debug",  ImVec2(0, 710), ImGuiCond_Once);
+		ImGui::SetWindowSize("ASIC Debug", ImVec2(500, 200), ImGuiCond_Once);
+		if (ImGui::BeginTabBar("ASIC")) {
+			if (ImGui::BeginTabItem("General")) {
+				ImGui::Text("ASIC General Status:");
+				ImGui::Text("asic_rmr2_enabled: 0x%04X", top->top__DOT__cart_inst__DOT__asic_rmr2_enabled);
+				ImGui::Text("plus_bios_valid:   0x%04X", top->top__DOT__cart_inst__DOT__plus_bios_valid);
+				ImGui::Text("pri_irq:           0x%04X", top->top__DOT__cart_inst__DOT__pri_irq);
+				ImGui::Text("asic_video_active: 0x%04X", top->top__DOT__cart_inst__DOT__asic_video_active);
+				ImGui::Text("config_mode:       0x%04X", top->top__DOT__cart_inst__DOT__config_mode);
+				ImGui::Text("mrer_mode:         0x%04X", top->top__DOT__cart_inst__DOT__mrer_mode);
+				ImGui::Text("asic_mode:         0x%04X", top->top__DOT__cart_inst__DOT__asic_mode);
+				ImGui::Text("asic_enabled:      0x%04X", top->top__DOT__cart_inst__DOT__asic_enabled);
+				ImGui::Separator();
+				ImGui::Text("ACID:");
+				ImGui::Text("state:             0x%04X", top->top__DOT__cart_inst__DOT__acid_inst__DOT__state);
+				ImGui::Text("seq_index:         0x%04X", top->top__DOT__cart_inst__DOT__acid_inst__DOT__seq_index);
+				ImGui::Text("status_reg:        0x%04X", top->top__DOT__cart_inst__DOT__acid_inst__DOT__status_reg);
+				ImGui::Text("next_byte:         0x%04X", top->top__DOT__cart_inst__DOT__acid_inst__DOT__next_byte);
+				ImGui::Text("unlock_addr:       0x%04X", top->top__DOT__cart_inst__DOT__acid_inst__DOT__unlock_addr);
+				ImGui::EndTabItem();
+			}
+			if (ImGui::BeginTabItem("Control Registers")) {
+				ImGui::Text("ASIC Control Registers (0x7F00-0x7F0F):");
+				ImGui::Text("asic_control:      0x%04X", top->top__DOT__cart_inst__DOT__asic_control);
+				ImGui::Text("asic_config:       0x%04X", top->top__DOT__cart_inst__DOT__asic_config);
+				ImGui::Text("asic_version:      0x%04X", top->top__DOT__cart_inst__DOT__asic_version);
+				ImGui::Separator();
+				ImGui::Text("Video Control Registers (0x7F10-0x7F1F):");
+				ImGui::Text("video_control:     0x%04X", top->top__DOT__cart_inst__DOT__video_control);
+				ImGui::Text("video_status:      0x%04X", top->top__DOT__cart_inst__DOT__video_status);
+				ImGui::Text("video_config:      0x%04X", top->top__DOT__cart_inst__DOT__video_config);
+				ImGui::Text("video_palette:     0x%04X", top->top__DOT__cart_inst__DOT__video_palette);
+				ImGui::Text("video_effect:      0x%04X", top->top__DOT__cart_inst__DOT__video_effect);
+				ImGui::Separator();
+				ImGui::Text("Sprite Control Registers (0x7F20-0x7F2F):");
+				ImGui::Text("sprite_control:    0x%04X", top->top__DOT__cart_inst__DOT__sprite_control);
+				ImGui::Text("sprite_status:     0x%04X", top->top__DOT__cart_inst__DOT__sprite_status);
+				ImGui::Text("sprite_config:     0x%04X", top->top__DOT__cart_inst__DOT__sprite_config);
+				ImGui::Text("sprite_priority:   0x%04X", top->top__DOT__cart_inst__DOT__sprite_priority);
+				ImGui::Text("sprite_collision   0x%04X", top->top__DOT__cart_inst__DOT__sprite_collision);
+				ImGui::Separator();
+				ImGui::Text("Audio Control Registers (0x7F30-0x7F3F):");
+				ImGui::Text("audio_control:     0x%04X", top->top__DOT__cart_inst__DOT__audio_control);
+				ImGui::Text("audio_config:      0x%04X", top->top__DOT__cart_inst__DOT__audio_config);
+				ImGui::Text("audio_volume:      0x%04X", top->top__DOT__cart_inst__DOT__audio_volume);
+				ImGui::EndTabItem();
+			}
+			ImGui::EndTabBar();
+		}
+		ImGui::End();
 
 		// Trace window
 		ImGui::Begin(windowTitle_Trace);

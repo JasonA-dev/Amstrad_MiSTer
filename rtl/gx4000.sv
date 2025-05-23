@@ -764,25 +764,4 @@ wire [7:0] psg_data;
 wire       psg_wr;
 wire [7:0] psg_ch_a, psg_ch_b, psg_ch_c;
 
-// --- YM2149 PSG instance ---
-YM2149 psg_inst (
-    .CLK(clk_sys),
-    .CE(1'b1), // Always enabled, or use a divided clock if needed
-    .RESET(reset),
-    .BDIR(psg_wr),
-    .BC(1'b0), // 0=write, 1=address set; you may need to add logic for address/data
-    .DI(psg_data),
-    .DO(), // Not used
-    .CHANNEL_A(psg_ch_a),
-    .CHANNEL_B(psg_ch_b),
-    .CHANNEL_C(psg_ch_c),
-    .SEL(1'b0),
-    .MODE(1'b0),
-    .ACTIVE(),
-    .IOA_in(8'hFF),
-    .IOA_out(),
-    .IOB_in(8'hFF),
-    .IOB_out()
-);
-
 endmodule 

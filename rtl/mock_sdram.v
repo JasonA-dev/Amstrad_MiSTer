@@ -102,18 +102,5 @@ always @(posedge clk) begin
         tape_rd_ack <= ~tape_rd_ack; // Toggle ack to indicate completion
     end
 end
-/*
-// Initialize memory to zeros
-initial begin
-    integer i;
-    for (i = 0; i < 8388607; i = i + 1) begin
-        ram[i] = 8'h00;
-    end
-    
-    out_data = 8'h00;
-    vram_data = 16'h0000;
-    tape_data = 8'h00;
-    tape_rd_ack = 0;
-end
-*/
+
 endmodule 

@@ -91,15 +91,14 @@ module GX4000_video
     input [7:0] vram_dout,
 
     // Add outputs for DMA trigger
-    output reg dma_hsync_pulse,
-
-    // Add registers for MAME-style HSYNC logic
-    reg [8:0] vpos; // vertical position (scanline)
-    reg [7:0] hsync_counter;
-    reg [7:0] hsync_after_vsync_counter;
-    reg [7:0] plus_irq_cause;
-    reg split_screen_event
+    output reg dma_hsync_pulse
 );
+
+// Internal registers for scanline and counters
+reg [7:0] hsync_counter;
+reg [7:0] hsync_after_vsync_counter;
+reg [7:0] plus_irq_cause;
+reg split_screen_event;
 
 // Internal signals
 wire [7:0] collision_flags;
@@ -260,12 +259,11 @@ reg asic_ram_addr_sel; // 0: palette fetch, 1: sprite
 reg prev_crtc_de;
 reg [13:0] de_ma_latch;
 reg [4:0] de_ra_latch;
-reg hsync_first_tick;
-reg [7:0] hsync_tick_count;
+
 reg [7:0] h_start;
 reg [7:0] h_end;
 reg de_start;
-reg [7:0] hscroll;
+
 reg [15:0] border_color;
 reg [15:0] split_ma_base;
 reg [15:0] split_ma_started;
@@ -536,7 +534,6 @@ initial begin
     asic_vsync = 0;
     asic_hblank = 0;
     asic_vblank = 0;
-    vpos <= 0;
     hsync_counter <= 0;
     hsync_after_vsync_counter <= 0;
     plus_irq_cause <= 0;
@@ -732,7 +729,6 @@ end
 // Main HSYNC logic
 always @(posedge clk_sys) begin
     if (reset) begin
-        vpos <= 0;
         hsync_counter <= 0;
         hsync_after_vsync_counter <= 0;
         plus_irq_cause <= 0;
@@ -745,18 +741,16 @@ always @(posedge clk_sys) begin
         if (prev_crtc_hsync && !crtc_hsync) begin
             // Advance to next drawing line
             hsync_counter <= hsync_counter + 1;
-            vpos <= vpos + 1;
             // Reset line_ticks (not explicitly tracked)
             // Split screen event
-            if (split_line != 0 && split_line == vpos - 1) begin
+            if (split_line != 0 && split_line == hsync_counter) begin
                 split_screen_event <= 1;
                 // Optionally: trigger split screen logic here
             end
             // PRI (Programmable Raster Interrupt)
-            if (pri_line != 0 && pri_line == vpos) begin
+            if (pri_line != 0 && pri_line == hsync_counter) begin
                 pri_irq <= 1;
                 plus_irq_cause <= 8'h06; // raster interrupt vector
-                hsync_counter <= hsync_counter & ~8'h20; // reset MSB
             end
             // Raster interrupt timing
             if (hsync_after_vsync_counter != 0) begin
@@ -779,9 +773,9 @@ always @(posedge clk_sys) begin
             // DMA trigger
             dma_hsync_pulse <= 1;
         end
-        // VSYNC handling (reset vpos at start of frame)
+        // VSYNC handling (reset hsync_counter at start of frame)
         if (crtc_vsync && !vsync_prev) begin
-            vpos <= 0;
+            hsync_counter <= 0;
             hsync_after_vsync_counter <= 0; // or set to initial value if needed
         end
     end
@@ -815,9 +809,9 @@ always @(posedge clk_sys) begin
             hsync_first_tick <= 1;
             hsync_tick_count <= 0;
             h_start <= 0; // You may want to use a pixel counter here
-            // Handle de_start/vpos
+            // Handle de_start/hsync_counter
             if (de_start == 0) begin
-                vpos <= 0;
+                hsync_counter <= 0;
             end
             de_start <= 1;
             // Fetch border color from ASIC RAM (simulate fetch, use asic_ram_q if needed)
@@ -828,12 +822,12 @@ always @(posedge clk_sys) begin
                 // Fetch new video data (handled elsewhere)
             end
             // Start of screen
-            if (vpos == 0) begin
+            if (hsync_counter == 0) begin
                 split_ma_base <= 16'h0000;
                 split_ma_started <= 16'h0000;
             end
             // Start of split screen section
-            else if (asic_enabled && asic_ram_q != 0 && asic_ram_q == vpos - 1) begin
+            else if (asic_enabled && asic_ram_q != 0 && asic_ram_q == hsync_counter - 1) begin
                 split_ma_started <= de_ma_latch;
                 split_ma_base <= {asic_ram_q, asic_ram_q}; // Placeholder: real fetch needs sequencing
             end

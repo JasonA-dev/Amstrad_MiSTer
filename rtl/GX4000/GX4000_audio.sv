@@ -1,3 +1,9 @@
+// DMA command fetch state machine
+localparam DMA_IDLE      = 2'b00;
+localparam DMA_FETCH_LO  = 2'b01;
+localparam DMA_FETCH_HI  = 2'b10;
+localparam DMA_EXECUTE   = 2'b11;
+
 module GX4000_audio
 (
     input         clk_sys,
@@ -52,18 +58,14 @@ module GX4000_audio
 
     // Add ASIC RAM interface for DMA
     output reg [13:0] asic_ram_addr,
-    input      [7:0]  asic_ram_q,
+    input      [7:0]  asic_ram_q
+);
 
-    // DMA command fetch state machine
-    localparam DMA_IDLE      = 2'b00;
-    localparam DMA_FETCH_LO  = 2'b01;
-    localparam DMA_FETCH_HI  = 2'b10;
-    localparam DMA_EXECUTE   = 2'b11;
+    // DMA state for each channel
     reg [1:0] dma_state;
     reg [1:0] dma_active_ch; // 0,1,2 (round-robin)
     reg [15:0] dma_command;
     reg       dma_pending;
-);
 
     // Audio registers
     reg [7:0] volume_l;
@@ -199,256 +201,24 @@ module GX4000_audio
             dma_repeat[ch] <= 0;
             dma_loopcount[ch] <= 0;
         end
-        dma_status <= 3'b000; // All channels active
-        psg_address <= 0;
-        psg_data <= 0;
-        psg_wr <= 0;
-        prev_reg <= 0;
-        irq_cause <= 0;
-        prev_dma_hsync_pulse <= 0;
-        dma_state <= DMA_IDLE;
-        dma_active_ch <= 0;
-        dma_command <= 16'h0000;
-        dma_pending <= 0;
-        asic_ram_addr <= 14'h0000;
     end
 
-    // Handle register writes
-    always @(posedge clk_sys) begin
-        if (reset) begin
-            volume_l <= 8'h00;
-            volume_r <= 8'h00;
-            tone_l <= 8'h00;
-            tone_r <= 8'h00;
-            phase_l <= 8'h00;
-            phase_r <= 8'h00;
-            noise_phase <= 8'h00;
-            filter_resonance <= 8'h00;
-            filter_mode <= 8'h00;
-            filter_state <= 8'h00;
-            reverb_level <= 8'h00;
-            reverb_time <= 8'h00;
-            reverb_pos <= 10'h000;
-            comp_threshold <= 8'h00;
-            comp_attack <= 8'h00;
-            comp_release <= 8'h00;
-            comp_gain <= 8'h00;
-            comp_level <= 8'h00;
-            comp_ratio <= 8'h00;
-            limit_threshold <= 8'h00;
-            limit_release <= 8'h00;
-            limit_level <= 8'h00;
-            limit_coeff <= 8'h00;
-            sfx_active <= 4'h0;
-            for (i = 0; i < 4; i = i + 1) begin
-                sfx_volume[i] <= 8'h00;
-                sfx_freq[i] <= 8'h00;
-                sfx_pan[i] <= 8'h00;
-                sfx_phase[i] <= 8'h00;
-                filter_coeff[i] <= 8'h00;
-                reverb_coeff[i] <= 8'h00;
-            end
-            dma_clear <= 1'b0;
-            internal_dma_status <= 3'b000;
-            for (i = 0; i < 3; i = i + 1) begin
-                dma_addr[i] <= 16'h0000;
-                dma_prescaler[i] <= 8'h00;
-            end
-            dma_irq_reg <= 1'b0;
-            for (ch = 0; ch < 3; ch = ch + 1) begin
-                dma_pause[ch] <= 0;
-                dma_repeat[ch] <= 0;
-                dma_loopcount[ch] <= 0;
-            end
-            dma_status <= 3'b000; // All channels active
-            psg_address <= 0;
-            psg_data <= 0;
-            psg_wr <= 0;
-            prev_reg <= 0;
-            irq_cause <= 0;
-            dma_state <= DMA_IDLE;
-            dma_active_ch <= 0;
-            dma_command <= 16'h0000;
-            dma_pending <= 0;
-            asic_ram_addr <= 14'h0000;
-        end else if (cpu_wr && cpu_addr[15:8] == 8'hBC) begin
-                case (cpu_addr[7:0])
-                8'hD0: volume_l <= cpu_data;
-                8'hD1: volume_r <= cpu_data;
-                8'hD2: tone_l <= cpu_data;
-                8'hD3: tone_r <= cpu_data;
-                8'hD4: filter_mode <= cpu_data;
-                8'hD5: filter_resonance <= cpu_data;
-                8'hD6: reverb_level <= cpu_data;
-                8'hD7: reverb_time <= cpu_data;
-                8'hD8: comp_threshold <= cpu_data;
-                8'hD9: comp_attack <= cpu_data;
-                8'hDA: comp_release <= cpu_data;
-                8'hDB: comp_gain <= cpu_data;
-                8'hDC: comp_ratio <= cpu_data;
-                8'hDD: limit_threshold <= cpu_data;
-                8'hDE: limit_release <= cpu_data;
-                8'hDF: limit_coeff <= cpu_data;
-                8'hE0: sfx_active[0] <= cpu_data[0];
-                8'hE1: sfx_active[1] <= cpu_data[0];
-                8'hE2: sfx_active[2] <= cpu_data[0];
-                8'hE3: sfx_active[3] <= cpu_data[0];
-            endcase
-        end else if (cpu_wr && cpu_addr[15:12] == 4'hC) begin
-            case (cpu_addr[11:0])
-                12'hC00, 12'hC01: begin
-                    dma_addr[0] <= {dma_addr[0][15:8], cpu_data};
-                    internal_dma_status[0] <= 1'b0;
-                end
-                12'hC04, 12'hC05: begin
-                    dma_addr[1] <= {dma_addr[1][15:8], cpu_data};
-                    internal_dma_status[1] <= 1'b0;
-                end
-                12'hC08, 12'hC09: begin
-                    dma_addr[2] <= {dma_addr[2][15:8], cpu_data};
-                    internal_dma_status[2] <= 1'b0;
-                end
-                12'hC02: dma_prescaler[0] <= cpu_data + 1;
-                12'hC06: dma_prescaler[1] <= cpu_data + 1;
-                12'hC0A: dma_prescaler[2] <= cpu_data + 1;
-                12'hC0F: begin
-                    // Handle DMA status register
-                    if (cpu_data[6]) begin  // DMA 0 IRQ acknowledge
-                        dma_irq_reg <= 1'b0;
-                    end
-                    if (cpu_data[5]) begin  // DMA 1 IRQ acknowledge
-                        dma_irq_reg <= 1'b0;
-                    end
-                    if (cpu_data[4]) begin  // DMA 2 IRQ acknowledge
-                        dma_irq_reg <= 1'b0;
-                    end
-                    // Update status register
-                    // (not implemented: asic_ram[13'h2C0F] update)
-                end
-            endcase
-        end
-    end
-    
-    // Audio output generation
-    always @(posedge clk_sys) begin
-        if (reset) begin
-            audio_l <= 8'h00;
-            audio_r <= 8'h00;
-        end else begin
-            // Mix CPC audio, PSG, and effects
-            audio_l <= cpc_audio_l + psg_ch_a + (sfx_active[0] ? sfx_volume[0] : 8'h00);
-            audio_r <= cpc_audio_r + psg_ch_c + (sfx_active[1] ? sfx_volume[1] : 8'h00);
-        end
-    end
-    
-    // Status output
-    assign audio_status = {sfx_active, 4'h0};
-
-    // DMA command handling (single always block for all channels)
-    always @(posedge clk_sys) begin
-        if (reset) begin
-            for (ch = 0; ch < 3; ch = ch + 1) begin
-                dma_pause[ch] <= 0;
-                dma_repeat[ch] <= 0;
-                dma_loopcount[ch] <= 0;
-            end
-            dma_status <= 3'b000; // All channels active
-            psg_address <= 0;
-            psg_data <= 0;
-            psg_wr <= 0;
-            prev_reg <= 0;
-            irq_cause <= 0;
-            prev_dma_hsync_pulse <= 0;
-        end else begin
-            prev_dma_hsync_pulse <= dma_hsync_pulse;
-            if (dma_hsync_pulse && !prev_dma_hsync_pulse) begin
-                for (ch = 0; ch < 3; ch = ch + 1) begin
-                    if (dma_status[ch]) begin // Channel active
-                        // Align to even address
-                        if (dma_addr[ch][0]) dma_addr[ch] <= dma_addr[ch] + 1;
-                        // Handle pause
-                        if (dma_pause[ch] != 0) begin
-                            dma_prescaler[ch] <= dma_prescaler[ch] - 1;
-                            if (dma_prescaler[ch] == 0) begin
-                                dma_pause[ch] <= dma_pause[ch] - 1;
-                                // TODO: Implement palette fetch using asic_ram_addr/asic_ram_q, not direct array access.
-                                // Example: set asic_ram_addr to (16'h2C02 + (4*ch)), wait for asic_ram_q, then use the value.
-                                // dma_prescaler[ch] <= asic_ram_q + 1; // Placeholder, real fetch needs sequencing
-                            end
-                        end else begin
-                            // Fetch 16-bit command from ASIC RAM (little endian)
-                            reg [15:0] command;
-                            // TODO: Implement command fetch using asic_ram_addr/asic_ram_q, not direct array access.
-                            // Example: set asic_ram_addr to dma_addr[ch], wait for asic_ram_q, then fetch high byte
-                            // command = {high_byte, low_byte}; // Placeholder, real fetch needs sequencing
-                            case (command[15:12])
-                                4'h0: begin // LOAD PSG register
-                                    psg_address <= (command[11:8]);
-                                    psg_data <= command[7:0];
-                                    psg_wr <= 1;
-                                    prev_reg <= psg_address;
-                                end
-                                4'h1: begin // PAUSE
-                                    dma_pause[ch] <= command[11:0] - 1;
-                                end
-                                4'h2: begin // REPEAT
-                                    dma_repeat[ch] <= dma_addr[ch];
-                                    dma_loopcount[ch] <= command[11:0];
-                                end
-                                4'h4: begin // Control
-                                    if (command[0]) begin // LOOP
-                                        if (dma_loopcount[ch] > 0) begin
-                                            dma_addr[ch] <= dma_repeat[ch];
-                                            dma_loopcount[ch] <= dma_loopcount[ch] - 1;
-                                        end
-                                    end
-                                    if (command[4]) begin // INT
-                                        irq_cause <= ch * 2;
-                                        // TODO: Implement status update using asic_ram_addr/asic_ram_q, not direct array access.
-                                    end
-                                    if (command[5]) begin // STOP
-                                        dma_status[ch] <= 0;
-                                    end
-                                end
-                                default: begin
-                                    // Unknown command
-                                end
-                            endcase
-                            dma_addr[ch] <= dma_addr[ch] + 2;
-                        end
-                    end
-                end
-                psg_wr <= 0; // Clear PSG write after use
-            end
-        end
-    end
-
-    // DMA command fetch state machine
+    // DMA command processing
     always @(posedge clk_sys) begin
         if (reset) begin
             dma_state <= DMA_IDLE;
-            dma_active_ch <= 0;
+            dma_active_ch <= 2'b00;
             dma_command <= 16'h0000;
-            dma_pending <= 0;
-            asic_ram_addr <= 14'h0000;
+            dma_pending <= 1'b0;
         end else begin
             case (dma_state)
                 DMA_IDLE: begin
-                    if (dma_hsync_pulse) begin
-                        // Find next active channel
-                        if (dma_status[dma_active_ch]) begin
-                            asic_ram_addr <= dma_addr[dma_active_ch];
-                            dma_state <= DMA_FETCH_LO;
-                            dma_pending <= 1;
-                        end else begin
-                            dma_active_ch <= (dma_active_ch == 2) ? 0 : dma_active_ch + 1;
-                            dma_pending <= 0;
-                        end
+                    if (dma_pending) begin
+                        dma_state <= DMA_FETCH_LO;
                     end
                 end
                 DMA_FETCH_LO: begin
                     dma_command[7:0] <= asic_ram_q;
-                    asic_ram_addr <= dma_addr[dma_active_ch] + 1;
                     dma_state <= DMA_FETCH_HI;
                 end
                 DMA_FETCH_HI: begin
@@ -456,7 +226,6 @@ module GX4000_audio
                     dma_state <= DMA_EXECUTE;
                 end
                 DMA_EXECUTE: begin
-                    // Execute the command (reuse your existing logic, but for dma_active_ch)
                     case (dma_command[15:12])
                         4'h0: begin // LOAD PSG register
                             psg_address <= (dma_command[11:8]);
