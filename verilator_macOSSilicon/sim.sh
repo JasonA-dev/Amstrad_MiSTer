@@ -12,15 +12,16 @@ verilator \
     ../rtl/UM6845R.v \
     ../rtl/YM2149.sv \
     ../rtl/dpram.sv \
+    ../rtl/color_mix.sv \
     ../rtl/hid.sv \
     ../rtl/mock_sdram.v \
     ../rtl/gx4000.sv \
-    ../rtl/GX4000/GX4000_ACID.sv \
-    ../rtl/GX4000/GX4000_audio.sv \
-    ../rtl/GX4000/GX4000_cartridge.v \
-    ../rtl/GX4000/GX4000_io.v \
-    ../rtl/GX4000/GX4000_sprite.sv \
-    ../rtl/GX4000/GX4000_video.sv \
+    ../rtl/ASIC/ASIC_ACID.sv \
+    ../rtl/ASIC/ASIC_audio.sv \
+    ../rtl/ASIC/ASIC_cartridge.v \
+    ../rtl/ASIC/ASIC_io.v \
+    ../rtl/ASIC/ASIC_sprite.sv \
+    ../rtl/ASIC/ASIC_video.sv \
     ../rtl/GA40010/ga40010.sv \
     ../rtl/GA40010/rslatch.v \
     ../rtl/GA40010/casgen.v \

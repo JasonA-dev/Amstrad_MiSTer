@@ -79,54 +79,63 @@ always @(posedge CLK) begin
 end
 
 always @(posedge CLK) begin
-	// Full Plus/GX4000 MMU logic
 	// Default: no ASIC register access
 	asic_reg_sel = 1'b0;
 	
-	if (asic_enabled && (A[15:0] >= 16'h4000 && A[15:0] <= 16'h7FFF) && (rmr2[4:3] == 2'b11)) begin
-		// Map 0x4000-0x7FFF to ASIC registers
-		asic_reg_sel = 1'b1;
-		// ram_A is don't care in this case
-		ram_A = 23'h0;
-	end else if (asic_enabled && (rmr2[4:3] != 2'b11)) begin
-		// Cartridge ROM mapping based on rmr2
-		// rmr2[2:0] = cart bank, rmr2[4:3] = location
-		// 0x00: 0x0000, 0x08: 0x4000, 0x10: 0x8000, 0x18: 0x0000+ASIC
-		case ({A[15:13]})
-			3'b000: begin // 0x0000-0x1FFF
-				if ((rmr2[4:3] == 2'b00) && (A[15:0] < 16'h4000)) begin
-					// Cart ROM at 0x0000
-					ram_A = {1'b1, (rmr2[2:0]), A[13:0]};
-				end else begin
-					// Standard RAM/ROM mapping
+	if (asic_enabled) begin
+		if ((A[15:0] >= 16'h4000) && (A[15:0] <= 16'h7FFF) && (rmr2[4:3] == 2'b11)) begin
+			// ASIC RAM/registers at 0x4000-0x7FFF when RMR2[4:3] = 11
+			asic_reg_sel = 1'b1;
+			ram_A = 23'h0; // Don't care when ASIC RAM is selected
+		end else begin
+			// Handle cartridge ROM mapping based on RMR2
+			case (A[15:13])
+				3'b000: begin // 0x0000-0x3FFF
+					if ((rmr2[4:3] == 2'b00) || (rmr2[4:3] == 2'b11)) begin
+						// Cart ROM at 0x0000 when RMR2[4:3] = 00 or 11
+						ram_A = {1'b1, rmr2[2:0], A[13:0]};
+					end else begin
+						// Standard RAM/ROM mapping
+						ram_A = {2'b00, 5'd2, A[15:14], A[13:0]};
+					end
+				end
+				3'b010: begin // 0x4000-0x5FFF
+					if (rmr2[4:3] == 2'b01) begin
+						// Cart ROM at 0x4000 when RMR2[4:3] = 01
+						ram_A = {1'b1, rmr2[2:0], A[13:0]};
+					end else begin
+						// Standard RAM/ROM mapping
+						ram_A = {2'b00, 5'd2, A[15:14], A[13:0]};
+					end
+				end
+				3'b100: begin // 0x8000-0x9FFF
+					if (rmr2[4:3] == 2'b10) begin
+						// Cart ROM at 0x8000 when RMR2[4:3] = 10
+						ram_A = {1'b1, rmr2[2:0], A[13:0]};
+					end else begin
+						// Standard RAM/ROM mapping
+						ram_A = {2'b00, 5'd2, A[15:14], A[13:0]};
+					end
+				end
+				default: begin
+					// Standard RAM/ROM mapping for other addresses
 					ram_A = {2'b00, 5'd2, A[15:14], A[13:0]};
 				end
-			end
-			3'b010: begin // 0x4000-0x5FFF
-				if ((rmr2[4:3] == 2'b01) && (A[15:0] >= 16'h4000 && A[15:0] < 16'h6000)) begin
-					// Cart ROM at 0x4000
-					ram_A = {1'b1, (rmr2[2:0]), A[13:0]};
-				end else begin
-					ram_A = {2'b00, 5'd2, A[15:14], A[13:0]};
-				end
-			end
-			3'b100: begin // 0x8000-0x9FFF
-				if ((rmr2[4:3] == 2'b10) && (A[15:0] >= 16'h8000 && A[15:0] < 16'hA000)) begin
-					// Cart ROM at 0x8000
-					ram_A = {1'b1, (rmr2[2:0]), A[13:0]};
-				end else begin
-					ram_A = {2'b00, 5'd2, A[15:14], A[13:0]};
-				end
-			end
-			default: begin
-				// Standard RAM/ROM mapping
-				ram_A = {2'b00, 5'd2, A[15:14], A[13:0]};
-			end
-		endcase
+			endcase
+		end
 	end else begin
-		// Standard CPC mapping
+		// Standard CPC mapping when ASIC is not enabled
 		casex({romen_n, RAMmap, A[15:14]})
-			'b0_xxx_xx: ram_A[22:14] = {9{A[15]}} & {1'b1, ROMbank};  // lower/upper rom
+			'b0_xxx_xx: begin
+				// ROM access - handle write-through
+				if (io_WR) begin
+					// Write-through to underlying RAM
+					ram_A[22:14] = {2'b00, 5'd2, A[15:14]};
+				end else begin
+					// Normal ROM access
+					ram_A[22:14] = {9{A[15]}} & {1'b1, ROMbank};
+				end
+			end
 			'b1_0x1_11,                                               // map1&3 bank3
 			'b1_010_xx: ram_A[22:14] = {2'b00, RAMpage,    A[15:14]}; // map2   bank0-3 (ext  0..3)
 			'b1_011_01: ram_A[22:14] = {2'b00,    5'd2,       2'b11}; // map3   bank1   (base 3)
@@ -136,15 +145,5 @@ always @(posedge CLK) begin
 		ram_A[13:0] = A[13:0];
 	end
 end
-
-/*
-// Add debug output for memory access
-always @(posedge CLK) begin
-	if (!romen_n) begin
-		$display("[MMU] ROM access: addr=%h mapped_to=%h bank=%h", 
-				A, ram_A, ROMbank);
-	end
-end
-*/
 
 endmodule

@@ -1,4 +1,4 @@
-module GX4000_ACID
+module ASIC_ACID
 (
     input         clk_sys,
     input         reset,

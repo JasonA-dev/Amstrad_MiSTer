@@ -351,7 +351,6 @@ wire [7:0] plus_audio_l, plus_audio_r;
 // Memory interface signals
 wire [7:0]  cpu_din = ram_dout & mf2_dout;  // Add MF2 data to CPU input
 
-
 // Video memory interface signals
 wire [14:0] vram_addr;
 wire [15:0] vram_dout;
@@ -560,35 +559,6 @@ PlusMode cart_inst
     .analog_in(analog_in)
 );
 
-// Add debug statements for PlusMode signals
-always @(posedge clk_48) begin
-    if (ce_pix) begin
-        /*
-        $display("[PLUS_DEBUG] Timing: cclk_en_n=%b, crtc_de=%b, plus_mode=%b", 
-                cclk_en_n, crtc_de, plus_mode);
-        $display("[PLUS_DEBUG] Video: r_in=%b, g_in=%b, b_in=%b, r_out=%h, g_out=%h, b_out=%h", 
-                r, g, b, plus_r, plus_g, plus_b);
-        $display("[PLUS_DEBUG] CRTC: ma=%h, ra=%h, de=%b, vsync=%b, hsync=%b", 
-                MA, RA, crtc_de, crtc_vs, crtc_hs);
-        */
-    end
-end
-
-// Add debug for ROM loading
-always @(posedge clk_48) begin
-    if (ioctl_download && ioctl_wr) begin
-       // $display("[PLUS_DEBUG] ROM Load: addr=%h, data=%h, index=%h", 
-       //         download_addr, ioctl_dout, ioctl_index);
-    end
-end
-
-// Add debug for cartridge interface
-always @(posedge clk_48) begin
-    if (cart_wr) begin
-        //$display("[PLUS_DEBUG] Cart Write: addr=%h, data=%h", cart_addr, cart_data);
-    end
-end
-
 // Connect motherboard outputs to intermediate signals
 wire [1:0] mb_r = r;
 wire [1:0] mb_g = g;
@@ -609,17 +579,10 @@ always @(posedge clk_48) begin
     end else begin
         if (!VGA_HB && !VGA_VB) begin
             vga_pixel_counter <= vga_pixel_counter + 1;
-            
-            // Log every 1000th pixel for debugging
-            if (vga_pixel_counter % 1000 == 0) begin
-                //$display("[VGA_OUT] Pixel %d: R=%h G=%h B=%h", 
-                //        vga_pixel_counter, VGA_R, VGA_G, VGA_B);
-            end
         end
         
         if (VGA_VB) begin
             vga_frame_counter <= vga_frame_counter + 1;
-            //$display("[VGA_OUT] Frame %d complete: %d pixels", vga_frame_counter, vga_pixel_counter);
             vga_pixel_counter <= 0;
         end
     end
@@ -629,8 +592,8 @@ assign VGA_R = plus_mode ? plus_r[3:0] : {mb_r, mb_r, mb_r};
 assign VGA_G = plus_mode ? plus_g[3:0] : {mb_g, mb_g, mb_g};
 assign VGA_B = plus_mode ? plus_b[3:0] : {mb_b, mb_b, mb_b};
 
-assign VGA_HS = ~hs;  // Invert for VGA
-assign VGA_VS = ~vs;  // Invert for VGA
+assign VGA_HS = ~hs;  
+assign VGA_VS = ~vs;  
 assign VGA_HB = hbl;
 assign VGA_VB = vbl;
 
@@ -700,5 +663,41 @@ assign crtc_hs = motherboard.hsync;   // was crtc_hs
 assign field = motherboard.field;
 assign cclk_en_n = ce_16; //motherboard.cclk_en_n;
 assign cclk_en_p = ce_16; //motherboard.cclk_en_p;
+
+// Color mix instance for simulation
+wire [7:0] cmix_R, cmix_G, cmix_B;
+wire      cmix_HS, cmix_VS, cmix_HB, cmix_VB;
+
+// Use a simple mix signal: 3'b001 for ASIC palette in Plus mode, 3'b000 for GA palette otherwise
+wire [2:0] sim_mix = plus_mode ? 3'b001 : 3'b000;
+
+color_mix color_mix_inst (
+    .clk_vid(clk_48),
+    .ce_pix(ce_pix),
+    .mix(sim_mix),
+    .R_in(plus_mode ? plus_r : {mb_r, mb_r}),
+    .G_in(plus_mode ? plus_g : {mb_g, mb_g}),
+    .B_in(plus_mode ? plus_b : {mb_b, mb_b}),
+    .HSync_in(hs),
+    .VSync_in(vs),
+    .HBlank_in(hbl),
+    .VBlank_in(vbl),
+    .R_out(cmix_R),
+    .G_out(cmix_G),
+    .B_out(cmix_B),
+    .HSync_out(cmix_HS),
+    .VSync_out(cmix_VS),
+    .HBlank_out(cmix_HB),
+    .VBlank_out(cmix_VB)
+);
+
+// Route color_mix outputs to VGA outputs
+assign VGA_R = cmix_R[7:2];
+assign VGA_G = cmix_G[7:2];
+assign VGA_B = cmix_B[7:2];
+assign VGA_HS = cmix_HS;
+assign VGA_VS = cmix_VS;
+assign VGA_HB = cmix_HB;
+assign VGA_VB = cmix_VB;
 
 endmodule

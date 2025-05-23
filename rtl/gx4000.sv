@@ -139,12 +139,14 @@ module PlusMode
     assign cart_data = cart_data_int;
     assign cart_wr = cart_wr_int;
     
+    /*
     // Connect CRTC interface signals
     assign crtc_enable = crtc_reg_wr;
     assign crtc_cs_n = ~(cpu_addr[15:8] == 8'hBC);  // Active low chip select for BC addresses
     assign crtc_r_nw = ~cpu_wr;  // Active low write signal
     assign crtc_rs = cpu_addr[0];  // Register select from address bit 0
     assign crtc_data = cpu_data_in;  // Use cpu_data_in for writes
+*/
 
     // Connect ASIC sync signals
     assign asic_hsync_in = hsync;
@@ -178,6 +180,7 @@ module PlusMode
     reg [4:0] mrer_mode;
     reg [7:0] asic_mode;
     reg       asic_enabled;
+    reg [7:0] rmr2;  // Add RMR2 register
 
     // Video mode handling
 always @(posedge clk_sys) begin
@@ -186,6 +189,7 @@ always @(posedge clk_sys) begin
         mrer_mode <= 5'h00;
         asic_mode <= 8'h00;
         asic_enabled <= 1'b0;
+        rmr2 <= 8'h00;  // Reset RMR2
     end else if (cpu_wr && cpu_addr[15:8] == 8'hBC) begin
         if (cpu_addr[0] == 0) begin
             case (cpu_data_in[4:0])
@@ -199,6 +203,9 @@ always @(posedge clk_sys) begin
                     asic_mode <= cpu_data_in;
                     // Enable ASIC in Plus mode for modes 0x02, 0x62, and 0x82
                     asic_enabled <= ((cpu_data_in == 8'h02) || (cpu_data_in == 8'h62) || (cpu_data_in == 8'h82)) && plus_mode;
+                end
+                5'h03: begin
+                    rmr2 <= cpu_data_in;  // Handle RMR2 writes
                 end
             endcase
         end
@@ -330,7 +337,7 @@ end
 
     // ACID module instance
     wire [7:0] acid_data_out;
-    GX4000_ACID acid_inst
+    ASIC_ACID acid_inst
     (
         .clk_sys(clk_sys),
         .reset(reset),
@@ -392,7 +399,11 @@ end
         .psg_wr(psg_wr),
         .psg_ch_a(psg_ch_a),
         .psg_ch_b(psg_ch_b),
-        .psg_ch_c(psg_ch_c)
+        .psg_ch_c(psg_ch_c),
+        .video_control(video_control),
+        .dma_hsync_pulse(1'b0),
+        .asic_ram_addr(asic_ram_addr),
+        .asic_ram_q(asic_ram_q)
     );
 
     // Cartridge module instance
@@ -485,11 +496,16 @@ wire        asic_ram_rd_mod;
 wire        asic_ram_wr_mod;
 wire [7:0]  asic_ram_din_mod;
 
-// Add RMR2 check for ASIC RAM access
-wire asic_rmr2_enabled = mrer_mode[4] && mrer_mode[3]; // RMR2[4:3] == 2'b11
+// Update RMR2 enable check
+wire asic_rmr2_enabled = rmr2[4] && rmr2[3]; // RMR2[4:3] == 2'b11
 
-// Update cpu_asic_ram_access to include RMR2 check
-wire cpu_asic_ram_access = plus_mode && use_asic && asic_enabled && asic_rmr2_enabled && (cpu_addr >= 16'h4000) && (cpu_addr <= 16'h7FFF);
+// Update cpu_asic_ram_access to include RMR2 check and prevent write-through
+wire cpu_asic_ram_access = plus_mode && use_asic && asic_enabled && asic_rmr2_enabled && 
+                          (cpu_addr >= 16'h4000) && (cpu_addr <= 16'h7FFF) && !cpu_wr;
+
+// Update cpu_normal_ram_access to handle write-through correctly
+wire cpu_normal_ram_access = (cpu_addr >= 16'h4000) && (cpu_addr <= 16'h7FFF) && 
+                            (!cpu_asic_ram_access || cpu_wr);  // Allow writes even when ASIC is enabled
 
 wire [13:0] asic_ram_addr_mux = cpu_asic_ram_access ? asic_ram_addr_cpu : asic_ram_addr_mod;
 wire        asic_ram_rd_mux   = cpu_asic_ram_access ? cpu_rd : asic_ram_rd_mod;
@@ -727,7 +743,8 @@ always @(posedge clk_sys) begin
     end
 end
 
-wire cpu_normal_ram_access = (cpu_addr >= 16'h4000) && (cpu_addr <= 16'h7FFF) && !(cpu_asic_ram_access);
+wire cpu_normal_ram_access = (cpu_addr >= 16'h4000) && (cpu_addr <= 16'h7FFF) && 
+                            (!cpu_asic_ram_access || cpu_wr);  // Allow writes even when ASIC is enabled
 
 assign sdram_addr = cpu_addr; // or cpu_addr[13:0] if only 16KB, or as needed for your SDRAM mapping
 assign sdram_oe   = cpu_normal_ram_access && cpu_rd;

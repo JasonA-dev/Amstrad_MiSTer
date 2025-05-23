@@ -58,7 +58,10 @@ module GX4000_audio
 
     // Add ASIC RAM interface for DMA
     output reg [13:0] asic_ram_addr,
-    input      [7:0]  asic_ram_q
+    input      [7:0]  asic_ram_q,
+
+    // Add video_control input
+    input   [7:0] video_control
 );
 
     // DMA state for each channel
@@ -266,6 +269,21 @@ module GX4000_audio
                     dma_state <= DMA_IDLE;
                 end
             endcase
+        end
+    end
+
+    // DMA trigger from video_control
+    always @(posedge clk_sys) begin
+        if (reset) begin
+            dma_pending <= 1'b0;
+        end else begin
+            // Bit 0: DMA start, Bit 1: DMA stop
+            if (video_control[0]) begin
+                dma_pending <= 1'b1;
+            end
+            if (video_control[1]) begin
+                dma_pending <= 1'b0;
+            end
         end
     end
 

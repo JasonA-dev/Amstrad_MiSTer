@@ -502,7 +502,7 @@ int main(int argc, char** argv, char** env) {
 		if (ImGui::BeginTabBar("ASIC")) {
 			if (ImGui::BeginTabItem("General")) {
 				ImGui::Text("ASIC General Status:");
-				ImGui::Text("asic_rmr2_enabled: 0x%04X", top->top__DOT__cart_inst__DOT__asic_rmr2_enabled);
+				ImGui::Text("rmr2:              0x%04X", top->top__DOT__cart_inst__DOT__rmr2);
 				ImGui::Text("plus_bios_valid:   0x%04X", top->top__DOT__cart_inst__DOT__plus_bios_valid);
 				ImGui::Text("pri_irq:           0x%04X", top->top__DOT__cart_inst__DOT__pri_irq);
 				ImGui::Text("asic_video_active: 0x%04X", top->top__DOT__cart_inst__DOT__asic_video_active);
@@ -543,6 +543,27 @@ int main(int argc, char** argv, char** env) {
 				ImGui::Text("audio_control:     0x%04X", top->top__DOT__cart_inst__DOT__audio_control);
 				ImGui::Text("audio_config:      0x%04X", top->top__DOT__cart_inst__DOT__audio_config);
 				ImGui::Text("audio_volume:      0x%04X", top->top__DOT__cart_inst__DOT__audio_volume);
+				ImGui::EndTabItem();
+			}
+			if (ImGui::BeginTabItem("Palette Registers")) {
+				ImGui::Text("Palette Registers:");
+				ImGui::Text("palette_pointer:       0x%04X", top->top__DOT__cart_inst__DOT__video_inst__DOT__palette_pointer);
+				ImGui::Text("selected_palette:      0x%04X", top->top__DOT__cart_inst__DOT__video_inst__DOT__selected_palette);
+				ImGui::Text("palette_latch_r:       0x%04X", top->top__DOT__cart_inst__DOT__video_inst__DOT__palette_latch_r);
+				ImGui::Text("palette_latch_g:       0x%04X", top->top__DOT__cart_inst__DOT__video_inst__DOT__palette_latch_g);
+				ImGui::Text("palette_latch_b:       0x%04X", top->top__DOT__cart_inst__DOT__video_inst__DOT__palette_latch_b);
+				ImGui::Separator();
+				ImGui::Text("Palette Data:");
+				ImGui::Text("pal_idx:               0x%04X", top->top__DOT__cart_inst__DOT__video_inst__DOT__pal_idx);
+				ImGui::Text("pal_data:              0x%04X", top->top__DOT__cart_inst__DOT__video_inst__DOT__pal_data);
+				ImGui::Text("pal_base:              0x%04X", top->top__DOT__cart_inst__DOT__video_inst__DOT__pal_base);
+				ImGui::Separator();
+				ImGui::Text("alt_palette_en:        0x%04X", top->top__DOT__cart_inst__DOT__video_inst__DOT__alt_palette_en);
+				ImGui::Text("effect_en:             0x%04X", top->top__DOT__cart_inst__DOT__video_inst__DOT__effect_en);
+				ImGui::Text("raster_effect_en:      0x%04X", top->top__DOT__cart_inst__DOT__video_inst__DOT__raster_effect_en);
+				ImGui::Text("split_screen_cfg:      0x%04X", top->top__DOT__cart_inst__DOT__video_inst__DOT__split_screen_cfg);
+				ImGui::Text("palette_update_en:     0x%04X", top->top__DOT__cart_inst__DOT__video_inst__DOT__palette_update_en);
+				ImGui::Text("palette_bank_sel:      0x%04X", top->top__DOT__cart_inst__DOT__video_inst__DOT__palette_bank_sel);
 				ImGui::EndTabItem();
 			}
 			ImGui::EndTabBar();
