@@ -271,8 +271,8 @@ int main(int argc, char** argv, char** env) {
 
 	// Example downloads
 	//bus.QueueDownload("./OS6128.rom", 0, true);
-	bus.QueueDownload("./original.rom", 0, true);
-	//bus.QueueDownload("./diagnostics.rom", 0, true);
+	//bus.QueueDownload("./original.rom", 0, true);
+	bus.QueueDownload("./diagnostics.rom", 0, true);
 
 #ifdef WIN32
 	MSG msg;
