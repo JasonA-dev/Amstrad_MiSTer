@@ -1,4 +1,4 @@
-module PlusMode
+module ASIC
 (
     input         clk_sys,
     input         reset,
@@ -78,14 +78,14 @@ module PlusMode
     
     // Plus-specific outputs
     output        plus_bios_valid,
-    output reg   pri_irq,
+    output reg    pri_irq,
 
     output        asic_video_active,
 
     input   [7:0] sdram_dout,
 
     // Added for ASIC 0x6000 region read logic
-    input  [5:0] analog_in [3:0], // 4 analogue channels, 6 bits each
+    input  [5:0]  analog_in [3:0], // 4 analogue channels, 6 bits each
 
     // Add SDRAM interface signals
     output [22:0] sdram_addr,
@@ -94,50 +94,50 @@ module PlusMode
     output [7:0]  sdram_din,
 
     // Removed the duplicate dma_status register and use internal_dma_status instead
-    reg [2:0] internal_dma_status         // DMA status bits
+    reg [2:0]     internal_dma_status         // DMA status bits
 );
 
-    // Internal signals
-    wire [7:0] io_dout;
-    wire [22:0] rom_addr;
-    wire [7:0] rom_data;
-    wire       rom_wr;
-    wire       rom_rd;
-    wire [7:0] rom_q;
-    wire       auto_boot;
-    wire [15:0] boot_addr;
-    wire [15:0] plus_bios_checksum;
-    wire [7:0]  plus_bios_version;
+ // Internal signals
+wire [7:0]  io_dout;
+wire [22:0] rom_addr;
+wire [7:0]  rom_data;
+wire        rom_wr;
+wire        rom_rd;
+wire [7:0]  rom_q;
+wire        auto_boot;
+wire [15:0] boot_addr;
+wire [15:0] plus_bios_checksum;
+wire [7:0]  plus_bios_version;
     
-    // I/O signals
-    wire [7:0] io_status;
-    wire [7:0] io_control;  // Changed back to wire
-    wire [7:0] io_data;
-    wire [7:0] io_direction;
-    wire [7:0] io_interrupt;
-    wire [7:0] io_timer;
-    wire [7:0] io_clock;
+// I/O signals
+wire [7:0] io_status;
+wire [7:0] io_control;  // Changed back to wire
+wire [7:0] io_data;
+wire [7:0] io_direction;
+wire [7:0] io_interrupt;
+wire [7:0] io_timer;
+wire [7:0] io_clock;
     
-    // Cartridge interface signals
-    wire [24:0] cart_addr_int;  // Internal cartridge address
-    wire [7:0]  cart_data_int;  // Internal cartridge data
-    wire        cart_wr_int;    // Internal cartridge write
-    wire        cart_rd = 1'b0; // Fixed to 0 as it's only an input to cart_inst
+// Cartridge interface signals
+wire [24:0] cart_addr_int;  // Internal cartridge address
+wire [7:0]  cart_data_int;  // Internal cartridge data
+wire        cart_wr_int;    // Internal cartridge write
+wire        cart_rd = 1'b0; // Fixed to 0 as it's only an input to cart_inst
     
-    // ASIC RAM interface wires
-    wire [13:0] asic_ram_addr;
-    wire        asic_ram_rd;
-    wire        asic_ram_wr;
-    wire [7:0]  asic_ram_din;
-    wire [7:0]  asic_ram_q;
+// ASIC RAM interface wires
+wire [13:0] asic_ram_addr;
+wire        asic_ram_rd;
+wire        asic_ram_wr;
+wire [7:0]  asic_ram_din;
+wire [7:0]  asic_ram_q;
     
-    // Use Gate Array clock enable for timing
-    wire crtc_clken_actual = cclk_en_n;
+// Use Gate Array clock enable for timing
+wire crtc_clken_actual = cclk_en_n;
 
-    // Assign cartridge outputs
-    assign cart_addr = cart_addr_int;
-    assign cart_data = cart_data_int;
-    assign cart_wr = cart_wr_int;
+// Assign cartridge outputs
+assign cart_addr = cart_addr_int;
+assign cart_data = cart_data_int;
+assign cart_wr = cart_wr_int;
     
     /*
     // Connect CRTC interface signals
@@ -146,43 +146,43 @@ module PlusMode
     assign crtc_r_nw = ~cpu_wr;  // Active low write signal
     assign crtc_rs = cpu_addr[0];  // Register select from address bit 0
     assign crtc_data = cpu_data_in;  // Use cpu_data_in for writes
-*/
+    */
 
-    // Connect ASIC sync signals
-    assign asic_hsync_in = hsync;
-    assign asic_vsync_in = crtc_vsync;
-    assign asic_hblank_in = hblank;
-    assign asic_vblank_in = vblank;
+// Connect ASIC sync signals
+assign asic_hsync_in = hsync;
+assign asic_vsync_in = crtc_vsync;
+assign asic_hblank_in = hblank;
+assign asic_vblank_in = vblank;
     
-    // Sprite-related signals from video module
+// Sprite-related signals from video module
     wire [3:0] sprite_id;
     wire       sprite_active;
     wire [7:0] collision_reg;
     
-    // CRTC update interface signals
+// CRTC update interface signals
     wire        crtc_reg_wr;
     wire [3:0]  crtc_reg_sel;
     wire [7:0]  crtc_reg_data;
 
-    // GA40010 (Gate Array) update interface signals
+// GA40010 (Gate Array) update interface signals
     wire        ga_reg_wr;
     wire [3:0]  ga_reg_sel;
     wire [7:0]  ga_reg_data;
 
-    // Real ASIC sync signal inputs
+// Real ASIC sync signal inputs
     wire        asic_hsync_in;
     wire        asic_vsync_in;
     wire        asic_hblank_in;
     wire        asic_vblank_in;
     
-    // Video mode registers
+// Video mode registers
     reg [7:0] config_mode;
     reg [4:0] mrer_mode;
     reg [7:0] asic_mode;
     reg       asic_enabled;
     reg [7:0] rmr2;  // Add RMR2 register
 
-    // Video mode handling
+// Video mode handling
 always @(posedge clk_sys) begin
     if (reset) begin
         config_mode <= 8'h00;
@@ -212,9 +212,9 @@ always @(posedge clk_sys) begin
     end
 end
 
-    // I/O module instance
-    GX4000_io io_inst
-    (
+ // I/O module instance
+GX4000_io io_inst
+(
         .clk_sys(clk_sys),
         .reset(reset),
         .plus_mode(plus_mode),
@@ -239,10 +239,10 @@ end
         .io_interrupt(io_interrupt),
         .io_timer(io_timer),
         .io_clock(io_clock)
-    );
+);
 
     // Video module instance (with integrated sprite handling)
-    GX4000_video video_inst
+GX4000_video video_inst
     (
         .clk_sys(clk_sys),
         .reset(reset),
@@ -329,10 +329,9 @@ end
         .asic_vblank_in(asic_vblank_in),
         
         // Interrupt output
-        .pri_irq(pri_irq),
-
         .asic_video_active(asic_video_active),
-        .vram_dout(sdram_dout)
+        .vram_dout(sdram_dout),
+        .raster_line(raster_line)
     );
 
     // ACID module instance
@@ -375,33 +374,41 @@ end
         .clk_sys(clk_sys),
         .reset(reset),
         .plus_mode(plus_mode & use_asic),
+
         .cpu_addr(cpu_addr),
         .cpu_data(cpu_data_in),
         .cpu_wr(cpu_wr),
         .cpu_rd(cpu_rd),
         .cpc_audio_l(cpc_audio_l),
         .cpc_audio_r(cpc_audio_r),
+
         .sprite_id(sprite_id),
         .sprite_collision(sprite_active),
         .sprite_movement(collision_reg),
+
         .hblank(hblank),
         .vblank(vblank),
+        .video_control(video_control),
+
         .audio_l(audio_l),
         .audio_r(audio_r),
+
         .audio_status(audio_status),
         .audio_control(io_control),
         .audio_config(io_config),
         .audio_volume(io_volume),
+
         .dma_status(dma_status_audio),
         .dma_irq(dma_irq_audio),
+        .dma_hsync_pulse(1'b0),
+
         .psg_address(psg_address),
         .psg_data(psg_data),
         .psg_wr(psg_wr),
         .psg_ch_a(psg_ch_a),
         .psg_ch_b(psg_ch_b),
         .psg_ch_c(psg_ch_c),
-        .video_control(video_control),
-        .dma_hsync_pulse(1'b0),
+
         .asic_ram_addr(asic_ram_addr),
         .asic_ram_q(asic_ram_q)
     );
@@ -780,5 +787,21 @@ wire [7:0] psg_address;
 wire [7:0] psg_data;
 wire       psg_wr;
 wire [7:0] psg_ch_a, psg_ch_b, psg_ch_c;
+
+// Connect raster_line from video module
+wire [7:0] raster_line;
+
+always @(posedge clk_sys) begin
+    if (reset) begin
+        pri_irq <= 1'b0;
+    end else begin
+        // Generate PRI IRQ when raster_line matches pri_line
+        if (plus_mode && use_asic && asic_enabled && (raster_line == pri_line)) begin
+            pri_irq <= 1'b1;
+        end else begin
+            pri_irq <= 1'b0;
+        end
+    end
+end
 
 endmodule 

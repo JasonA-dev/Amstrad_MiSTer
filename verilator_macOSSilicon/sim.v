@@ -405,7 +405,7 @@ Amstrad_motherboard motherboard
     // PPI jumpers for proper hardware detection
     // Format is {motor on/off, distributor, cpc type, vsync/index}
     .ppi_jumpers({1'b1, 1'b1, ~model, 1'b1}),
-    .crtc_type(1'b1),  // Type 1 CRTC
+    .crtc_type(1'b0),  // Type 1 CRTC
     .sync_filter(1'b1),
     .no_wait(1'b0),    // Enable proper wait states
     .gx4000_mode(1'b0),  // Not needed, using plus_mode only
@@ -471,8 +471,8 @@ assign analog_in[2] = 6'b0;
 assign analog_in[3] = 6'b0;
 wire [7:0] dma_status = 8'b0;
 
-// PlusMode instance (handles all Plus mode functionality)
-PlusMode cart_inst
+// ASIC instance (handles all ASIC functionality)
+ASIC asic_inst
 (
     .clk_sys(clk_48),
     .reset(RESET),
@@ -657,9 +657,9 @@ wire cclk_en_p;
 // Connect CRTC signals from motherboard
 assign MA = motherboard.MA;
 assign RA = motherboard.RA;
-assign crtc_de = ~(motherboard.vblank || motherboard.hblank);   // was crtc_de
-assign crtc_vs = motherboard.vsync;   // was crtc_vs
-assign crtc_hs = motherboard.hsync;   // was crtc_hs
+assign crtc_de = ~(vbl || hbl);   // was crtc_de
+assign crtc_vs = vs; //motherboard.crtc_vsync; // motherboard.vsync;   // was crtc_vs
+assign crtc_hs = hs; //motherboard.crtc_hsync; // motherboard.hsync;   // was crtc_hs
 assign field = motherboard.field;
 assign cclk_en_n = ce_16; //motherboard.cclk_en_n;
 assign cclk_en_p = ce_16; //motherboard.cclk_en_p;

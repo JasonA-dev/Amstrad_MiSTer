@@ -72,7 +72,7 @@ const int input_pause   = 11;
 // Video
 // -----
 #define VGA_ROTATE 0
-#define VGA_WIDTH  400
+#define VGA_WIDTH  320
 #define VGA_HEIGHT 200
 #define VGA_SCALE_X vga_scale
 #define VGA_SCALE_Y vga_scale
@@ -407,7 +407,7 @@ int main(int argc, char** argv, char** env) {
 				ImGui::EndTabItem();
 			}
 			if (ImGui::BeginTabItem("ASIC RAM (16K)")) {
-				mem_edit.DrawContents(&top->top__DOT__cart_inst__DOT__asic_ram[0], 16384, 0); // 16K
+				mem_edit.DrawContents(&top->top__DOT__asic_inst__DOT__asic_ram[0], 16384, 0); // 16K
 				ImGui::EndTabItem();
 			}
 			if (ImGui::BeginTabItem("VIDEO RAM (16K)")) {
@@ -502,49 +502,54 @@ int main(int argc, char** argv, char** env) {
 		if (ImGui::BeginTabBar("ASIC")) {
 			if (ImGui::BeginTabItem("General")) {
 				ImGui::Text("ASIC General Status:");
-				ImGui::Text("rmr2:              0x%04X", top->top__DOT__cart_inst__DOT__rmr2);
-				ImGui::Text("plus_bios_valid:   0x%04X", top->top__DOT__cart_inst__DOT__plus_bios_valid);
-				ImGui::Text("pri_irq:           0x%04X", top->top__DOT__cart_inst__DOT__pri_irq);
-				ImGui::Text("asic_video_active: 0x%04X", top->top__DOT__cart_inst__DOT__asic_video_active);
-				ImGui::Text("config_mode:       0x%04X", top->top__DOT__cart_inst__DOT__config_mode);
-				ImGui::Text("mrer_mode:         0x%04X", top->top__DOT__cart_inst__DOT__mrer_mode);
-				ImGui::Text("asic_mode:         0x%04X", top->top__DOT__cart_inst__DOT__asic_mode);
-				ImGui::Text("asic_enabled:      0x%04X", top->top__DOT__cart_inst__DOT__asic_enabled);
+				ImGui::Text("rmr2:              0x%04X", top->top__DOT__asic_inst__DOT__rmr2);
+				ImGui::Text("plus_bios_valid:   0x%04X", top->top__DOT__asic_inst__DOT__plus_bios_valid);
+				ImGui::Text("pri_irq:           0x%04X", top->top__DOT__asic_inst__DOT__pri_irq);
+				ImGui::Text("asic_video_active: 0x%04X", top->top__DOT__asic_inst__DOT__asic_video_active);
+				ImGui::Text("config_mode:       0x%04X", top->top__DOT__asic_inst__DOT__config_mode);
+				ImGui::Text("mrer_mode:         0x%04X", top->top__DOT__asic_inst__DOT__mrer_mode);
+				ImGui::Text("asic_mode:         0x%04X", top->top__DOT__asic_inst__DOT__asic_mode);
+				ImGui::Text("asic_enabled:      0x%04X", top->top__DOT__asic_inst__DOT__asic_enabled);
 				ImGui::Separator();
 				ImGui::Text("ACID:");
-				ImGui::Text("state:             0x%04X", top->top__DOT__cart_inst__DOT__acid_inst__DOT__state);
-				ImGui::Text("seq_index:         0x%04X", top->top__DOT__cart_inst__DOT__acid_inst__DOT__seq_index);
-				ImGui::Text("status_reg:        0x%04X", top->top__DOT__cart_inst__DOT__acid_inst__DOT__status_reg);
-				ImGui::Text("next_byte:         0x%04X", top->top__DOT__cart_inst__DOT__acid_inst__DOT__next_byte);
-				ImGui::Text("unlock_addr:       0x%04X", top->top__DOT__cart_inst__DOT__acid_inst__DOT__unlock_addr);
+				ImGui::Text("state:             0x%04X", top->top__DOT__asic_inst__DOT__acid_inst__DOT__state);
+				ImGui::Text("seq_index:         0x%04X", top->top__DOT__asic_inst__DOT__acid_inst__DOT__seq_index);
+				ImGui::Text("status_reg:        0x%04X", top->top__DOT__asic_inst__DOT__acid_inst__DOT__status_reg);
+				ImGui::Text("next_byte:         0x%04X", top->top__DOT__asic_inst__DOT__acid_inst__DOT__next_byte);
+				ImGui::Text("unlock_addr:       0x%04X", top->top__DOT__asic_inst__DOT__acid_inst__DOT__unlock_addr);
+				ImGui::Separator();
+				ImGui::Text("DMA:");
+				ImGui::Text("dma_status_audio:  0x%04X", top->top__DOT__asic_inst__DOT__dma_status_audio);
+				ImGui::Text("dma_irq_audio:     0x%04X", top->top__DOT__asic_inst__DOT__dma_irq_audio);
 				ImGui::EndTabItem();
 			}
 			if (ImGui::BeginTabItem("Control Registers")) {
 				ImGui::Text("ASIC Control Registers (0x7F00-0x7F0F):");
-				ImGui::Text("asic_control:      0x%04X", top->top__DOT__cart_inst__DOT__asic_control);
-				ImGui::Text("asic_config:       0x%04X", top->top__DOT__cart_inst__DOT__asic_config);
-				ImGui::Text("asic_version:      0x%04X", top->top__DOT__cart_inst__DOT__asic_version);
+				ImGui::Text("asic_control:      0x%04X", top->top__DOT__asic_inst__DOT__asic_control);
+				ImGui::Text("asic_config:       0x%04X", top->top__DOT__asic_inst__DOT__asic_config);
+				ImGui::Text("asic_version:      0x%04X", top->top__DOT__asic_inst__DOT__asic_version);
 				ImGui::Separator();
 				ImGui::Text("Video Control Registers (0x7F10-0x7F1F):");
-				ImGui::Text("video_control:     0x%04X", top->top__DOT__cart_inst__DOT__video_control);
-				ImGui::Text("video_status:      0x%04X", top->top__DOT__cart_inst__DOT__video_status);
-				ImGui::Text("video_config:      0x%04X", top->top__DOT__cart_inst__DOT__video_config);
-				ImGui::Text("video_palette:     0x%04X", top->top__DOT__cart_inst__DOT__video_palette);
-				ImGui::Text("video_effect:      0x%04X", top->top__DOT__cart_inst__DOT__video_effect);
+				ImGui::Text("video_control:     0x%04X", top->top__DOT__asic_inst__DOT__video_control);
+				ImGui::Text("video_status:      0x%04X", top->top__DOT__asic_inst__DOT__video_status);
+				ImGui::Text("video_config:      0x%04X", top->top__DOT__asic_inst__DOT__video_config);
+				ImGui::Text("video_palette:     0x%04X", top->top__DOT__asic_inst__DOT__video_palette);
+				ImGui::Text("video_effect:      0x%04X", top->top__DOT__asic_inst__DOT__video_effect);
 				ImGui::Separator();
 				ImGui::Text("Sprite Control Registers (0x7F20-0x7F2F):");
-				ImGui::Text("sprite_control:    0x%04X", top->top__DOT__cart_inst__DOT__sprite_control);
-				ImGui::Text("sprite_status:     0x%04X", top->top__DOT__cart_inst__DOT__sprite_status);
-				ImGui::Text("sprite_config:     0x%04X", top->top__DOT__cart_inst__DOT__sprite_config);
-				ImGui::Text("sprite_priority:   0x%04X", top->top__DOT__cart_inst__DOT__sprite_priority);
-				ImGui::Text("sprite_collision   0x%04X", top->top__DOT__cart_inst__DOT__sprite_collision);
+				ImGui::Text("sprite_control:    0x%04X", top->top__DOT__asic_inst__DOT__sprite_control);
+				ImGui::Text("sprite_status:     0x%04X", top->top__DOT__asic_inst__DOT__sprite_status);
+				ImGui::Text("sprite_config:     0x%04X", top->top__DOT__asic_inst__DOT__sprite_config);
+				ImGui::Text("sprite_priority:   0x%04X", top->top__DOT__asic_inst__DOT__sprite_priority);
+				ImGui::Text("sprite_collision   0x%04X", top->top__DOT__asic_inst__DOT__sprite_collision);
 				ImGui::Separator();
 				ImGui::Text("Audio Control Registers (0x7F30-0x7F3F):");
-				ImGui::Text("audio_control:     0x%04X", top->top__DOT__cart_inst__DOT__audio_control);
-				ImGui::Text("audio_config:      0x%04X", top->top__DOT__cart_inst__DOT__audio_config);
-				ImGui::Text("audio_volume:      0x%04X", top->top__DOT__cart_inst__DOT__audio_volume);
+				ImGui::Text("audio_control:     0x%04X", top->top__DOT__asic_inst__DOT__audio_control);
+				ImGui::Text("audio_config:      0x%04X", top->top__DOT__asic_inst__DOT__audio_config);
+				ImGui::Text("audio_volume:      0x%04X", top->top__DOT__asic_inst__DOT__audio_volume);
 				ImGui::EndTabItem();
 			}
+			/*
 			if (ImGui::BeginTabItem("Palette Registers")) {
 				ImGui::Text("Palette Registers:");
 				ImGui::Text("palette_pointer:       0x%04X", top->top__DOT__cart_inst__DOT__video_inst__DOT__palette_pointer);
@@ -566,6 +571,7 @@ int main(int argc, char** argv, char** env) {
 				ImGui::Text("palette_bank_sel:      0x%04X", top->top__DOT__cart_inst__DOT__video_inst__DOT__palette_bank_sel);
 				ImGui::EndTabItem();
 			}
+			*/
 			ImGui::EndTabBar();
 		}
 		ImGui::End();

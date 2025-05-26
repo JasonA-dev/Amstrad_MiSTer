@@ -15,7 +15,7 @@ verilator \
     ../rtl/color_mix.sv \
     ../rtl/hid.sv \
     ../rtl/mock_sdram.v \
-    ../rtl/gx4000.sv \
+    ../rtl/asic.sv \
     ../rtl/ASIC/ASIC_ACID.sv \
     ../rtl/ASIC/ASIC_audio.sv \
     ../rtl/ASIC/ASIC_cartridge.v \

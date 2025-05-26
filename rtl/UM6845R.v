@@ -103,7 +103,7 @@ always @(*) begin
 				14: DO = R14_cursor_h;
 				15: DO = R15_cursor_l;
 				31: DO = CRTC_TYPE ? 8'hFF : 8'h00;
-				 default: DO = 0;
+				default: DO = 0;
 			endcase
 		end
 		else if(CRTC_TYPE) begin
