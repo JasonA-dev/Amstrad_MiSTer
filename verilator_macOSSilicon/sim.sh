@@ -21,6 +21,7 @@ verilator \
     ../rtl/GA40010/syncgen.v \
     ../rtl/GA40010/syncgen_sync.v \
     ../rtl/GA40010/video.sv \
+    ../rtl/GX4000/GX4000_io.v \
     ../rtl/tv80/tv80_alu.v \
     ../rtl/tv80/tv80_core.v \
     ../rtl/tv80/tv80_mcode.v \

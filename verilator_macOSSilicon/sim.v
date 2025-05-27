@@ -1,5 +1,8 @@
 `timescale 1ns/1ns
 
+// Include GX4000_io module
+`include "../rtl/GX4000/GX4000_io.v"
+
 module top (
     input  wire        clk_48,
     input reg          reset,
@@ -356,6 +359,65 @@ wire        tape_data_ack = 0;
 wire [7:0]  tape_din = 8'h00;
 wire        tape_wr = 0;
 wire        tape_wr_ack = 0;
+
+// GX4000 I/O test signals
+wire [7:0] gx4000_io_dout;
+wire [7:0] printer_data;
+wire       printer_strobe;
+wire [7:0] rs232_data;
+wire       rs232_tx;
+wire       rs232_rts;
+wire [7:0] playcity_data;
+wire       playcity_wr;
+wire       playcity_rd;
+wire [7:0] peripheral_data;
+wire       peripheral_ready;
+
+// GX4000 I/O test instance
+GX4000_io gx4000_io_test
+(
+    .clk_sys(clk_48),
+    .reset(RESET),
+    .gx4000_mode(1'b1),  // Enable for testing
+    .plus_mode(1'b1),    // Enable for testing
+    
+    // CPU interface
+    .cpu_addr(cpu_addr),
+    .cpu_data(cpu_dout),
+    .cpu_wr(io_wr),
+    .cpu_rd(io_rd),
+    .io_dout(gx4000_io_dout),
+    
+    // Joystick interface
+    .joy1(joy1),
+    .joy2(joy2),
+    .joy_swap(1'b0),
+    
+    // Printer interface
+    .printer_data(printer_data),
+    .printer_strobe(printer_strobe),
+    .printer_busy(1'b0),
+    .printer_ack(1'b0),
+    
+    // RS232 interface
+    .rs232_data(rs232_data),
+    .rs232_tx(rs232_tx),
+    .rs232_rx(1'b0),
+    .rs232_rts(rs232_rts),
+    .rs232_cts(1'b0),
+    
+    // Playcity interface
+    .playcity_data(playcity_data),
+    .playcity_wr(playcity_wr),
+    .playcity_rd(playcity_rd),
+    .playcity_din(8'h00),
+    .playcity_ready(1'b0),
+    
+    // Peripheral interface
+    .peripheral_data(peripheral_data),
+    .peripheral_ready(peripheral_ready),
+    .peripheral_ack(1'b0)
+);
 
 // Add back Amstrad motherboard instantiation
 Amstrad_motherboard motherboard

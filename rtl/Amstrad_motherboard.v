@@ -369,7 +369,7 @@ hid HID
 	.joystick1(joy1),
 	.joystick2(joy2),
 
-	.Y(portC[3:0]),
+	.Y(plus_mode ? portC[7:4] : portC[3:0]),
 	.X(kbd_out),
 	.key_nmi(key_nmi),
 	.key_reset(key_reset),

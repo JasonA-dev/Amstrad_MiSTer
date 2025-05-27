@@ -55,6 +55,7 @@ module GX4000_io
     reg [7:0] playcity_reg;
     reg       rs232_tx_reg;
     reg       playcity_enable;
+    reg [7:0] plus_control_reg;  // New register for Plus control
     
     // I/O state
     reg [2:0] io_state;
@@ -86,6 +87,7 @@ module GX4000_io
             printer_busy_state <= 0;
             rs232_busy <= 0;
             playcity_busy <= 0;
+            plus_control_reg <= 8'h00;  // Reset Plus control register
             
             // GX4000 joystick state reset
             joy1_state <= 8'hFF;
@@ -104,6 +106,11 @@ module GX4000_io
                     8'h76: playcity_reg <= cpu_data;
                     8'h77: playcity_enable <= cpu_data[0];
                 endcase
+                
+                // Handle Plus-specific port ef7f
+                if (cpu_addr == 16'hef7f) begin
+                    plus_control_reg <= cpu_data;
+                end
             end
             
             // Joystick data update for standard ports
@@ -195,6 +202,9 @@ module GX4000_io
         // GX4000 joystick addresses
         (cpu_addr == 16'hF7F0) ? joy1_state :
         (cpu_addr == 16'hF7F1) ? joy2_state :
+        
+        // Plus-specific port
+        (cpu_addr == 16'hef7f) ? plus_control_reg :
         
         8'hFF;
     
