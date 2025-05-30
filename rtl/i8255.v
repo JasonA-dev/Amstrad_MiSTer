@@ -81,7 +81,9 @@ always @(posedge clk_sys) begin
 	if (reset) {opa_r,opb_r,opc_r,mode} <= {8'h00,8'h00,8'h00,8'h9B};
 	else begin
 		if(~old_we & we & cs) begin
+			$display("idata = %h, addr = %h", idata, addr);
 			case(addr)
+
 				0: opa_r <= idata;
 				1: opb_r <= idata;
 				2: opc_r <= (idata & maskC) | (opc_r & ~maskC);

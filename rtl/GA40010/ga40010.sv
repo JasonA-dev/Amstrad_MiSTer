@@ -271,4 +271,28 @@ video video_sync(
 	.RED(RED)
 );
 
+// Video signal handling
+always @(posedge clk) begin
+	if (cen_16) begin
+		// Debug CRTC signal changes
+		if (HSYNC_I != HSYNC_I_prev) begin
+			//$display("Gate Array: HSYNC_I changed to %b", HSYNC_I);
+			HSYNC_I_prev <= HSYNC_I;
+		end
+		if (VSYNC_I != VSYNC_I_prev) begin
+			//$display("Gate Array: VSYNC_I changed to %b", VSYNC_I);
+			VSYNC_I_prev <= VSYNC_I;
+		end
+		if (DISPEN != DISPEN_prev) begin
+			//$display("Gate Array: DISPEN changed to %b", DISPEN);
+			DISPEN_prev <= DISPEN;
+		end
+	end
+end
+
+// Add registers to track previous values
+reg HSYNC_I_prev;
+reg VSYNC_I_prev;
+reg DISPEN_prev;
+
 endmodule

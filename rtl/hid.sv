@@ -51,12 +51,7 @@ wire [6:0] joy2 = row6 ? {joystick2[6:4], joystick2[0], joystick2[1], joystick2[
 //================================== Keyboard ===========================================
 
 reg [7:0] key[16] = '{default:0};
-reg [7:0] joy1_reg, joy2_reg;
-reg alt;
-
-initial begin
-	alt = 0;
-end
+reg alt = 0;
 
 wire press = ps2_key[9];
 always @(posedge clk) begin
@@ -264,7 +259,7 @@ end
 wire [6:0] mouse = row9 ? {mbtn,mdir} : 7'd0;
 
 reg  [2:0] mbtn = 0;
-reg [3:0] mdir;
+wire [3:0] mdir;
 
 mouse_axis mx(clk, mstb, {ps2_mouse[4],ps2_mouse[15:8]},  ~row9, {mdir[2], mdir[3]});
 mouse_axis my(clk, mstb, {ps2_mouse[5],ps2_mouse[23:16]}, ~row9, {mdir[1], mdir[0]});

@@ -36,9 +36,7 @@ module Amstrad_motherboard
 	input         crtc_type,
 	input         sync_filter,
 	input         no_wait,
-	input         gx4000_mode,
 	input         plus_mode,
-	input         plus_rom_loaded,
 
 	input         tape_in,
 	output        tape_out,
@@ -81,7 +79,15 @@ module Amstrad_motherboard
 	output        m1,
 	input         irq,
 	input         nmi,
-	output        cursor
+	output        cursor,
+
+	// Register outputs from GX4000_registers
+	input  [7:0] ram_config,
+	input  [7:0] mrer,
+	input  [7:0] rom_select,
+	input  [7:0] ppi_control,
+	input  [7:0] pen_registers,
+	input  [4:0] current_pen
 );
 
 wire crtc_shift;
@@ -109,6 +115,14 @@ wire IORQ_n;
 wire RFSH_n;
 wire INT_n;
 wire M1_n;
+
+// Create wires for register values
+wire [7:0] ram_config_in;
+wire [7:0] mrer_in;
+wire [7:0] rom_select_in;
+wire [7:0] ppi_control_in = ppi_control;
+wire [7:0] pen_registers_in;
+wire [4:0] current_pen_out;
 
 `ifdef VERILATOR
 tv80s CPU
@@ -291,13 +305,16 @@ Amstrad_MMU MMU
 	.ram64k(ram64k),
 	.romen_n(romen_n),
 	.rom_map(rom_map),
-	.gx4000_mode(gx4000_mode),
 	.plus_mode(plus_mode),
-	.plus_rom_loaded(plus_rom_loaded),
 	.A(A),
 	.D(D),
 	.io_WR(io_wr),
-	.ram_A(mem_addr)
+	.ram_A(mem_addr),
+	
+	// Connect register outputs directly
+	.ram_config(ram_config_in),
+	.mrer(mrer_in),
+	.rom_select(rom_select_in)
 );
 
 wire [7:0] ppi_dout;
@@ -325,8 +342,9 @@ i8255 PPI
 	.opc(portC)
 );
 
-assign tape_motor = portC[4];
+// Connect tape output and motor directly from port C
 assign tape_out   = portC[5];
+assign tape_motor = portC[4];
 
 assign audio_l = {1'b0, ch_a[7:1]} + {2'b00, ch_b[7:2]};
 assign audio_r = {1'b0, ch_c[7:1]} + {2'b00, ch_b[7:2]};
@@ -341,8 +359,10 @@ YM2149 PSG
 	.SEL(0),
 	.MODE(0),
 
+	// Connect PSG control directly from port C
 	.BC(portC[6]),
 	.BDIR(portC[7]),
+	// Connect PSG data directly from port A
 	.DI(portAout),
 	.DO(portAin),
 
@@ -369,7 +389,8 @@ hid HID
 	.joystick1(joy1),
 	.joystick2(joy2),
 
-	.Y(plus_mode ? portC[7:4] : portC[3:0]),
+	// Connect keyboard line directly from port C
+	.Y(portC[3:0]),
 	.X(kbd_out),
 	.key_nmi(key_nmi),
 	.key_reset(key_reset),

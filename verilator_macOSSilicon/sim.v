@@ -336,7 +336,7 @@ wire        VGA_F1;
 // Memory interface signals
 wire [7:0]  ram_dout;
 wire [22:0] ram_a;
-wire [7:0]  cpu_din = ram_dout & mf2_dout;  // Add MF2 data to CPU input
+wire [7:0]  cpu_din = ram_dout & mf2_dout & asic_data_out;  // Add ASIC data to CPU input
 
 // Video memory interface signals
 wire [14:0] vram_addr;
@@ -372,6 +372,24 @@ wire       playcity_wr;
 wire       playcity_rd;
 wire [7:0] peripheral_data;
 wire       peripheral_ready;
+
+// ASIC register signals
+wire [7:0] asic_data_out;
+wire [7:0] ram_config;
+wire [7:0] pen_registers;
+wire [4:0] current_pen;
+
+// ACID signals
+wire [7:0]  acid_data_out;
+wire [7:0]  acid_ram_q;
+wire        acid_valid;
+wire [7:0]  acid_status;
+
+// ACID address decode - using memory reads/writes instead of I/O
+wire acid_io_rd = mem_rd && (cpu_addr[15:8] == 8'hBC);
+wire acid_io_wr = mem_wr && (cpu_addr[15:8] == 8'hBC);
+wire acid_ram_rd = mem_rd && (cpu_addr >= 16'h4000) && (cpu_addr <= 16'h7FFF);
+wire acid_ram_wr = mem_wr && (cpu_addr >= 16'h4000) && (cpu_addr <= 16'h7FFF);
 
 // GX4000 I/O test instance
 GX4000_io gx4000_io_test
@@ -419,6 +437,68 @@ GX4000_io gx4000_io_test
     .peripheral_ack(1'b0)
 );
 
+// ASIC registers instance
+GX4000_registers asic_regs
+(
+    .clk_sys(clk_48),
+    .reset(RESET),
+    .plus_mode(1'b1),    // Enable for testing
+    
+    // CPU interface
+    .cpu_addr(cpu_addr),
+    .cpu_data_in(cpu_dout),
+    .cpu_wr(io_wr),
+    .cpu_rd(io_rd),
+    .cpu_data_out(asic_data_out),
+    
+    // Register outputs
+    .ram_config(ram_config),
+    .rom_config(),        // Add empty connection for rom_config
+    .rom_select(rom_select),
+    .ppi_control(ppi_control),
+    .pen_registers(pen_registers),
+    .current_pen(current_pen),
+    .mrer(mrer)
+);
+
+// ACID test instance
+GX4000_ACID acid_test
+(
+    .clk_sys(clk_48),
+    .reset(RESET),
+    .plus_mode(1'b1),    // Enable for testing
+    
+    // CPU interface
+    .cpu_addr(cpu_addr),
+    .cpu_data_in(cpu_dout),
+    .cpu_wr(acid_io_wr),  // Memory write to BC00-BCFF
+    .cpu_rd(acid_io_rd),  // Memory read from BC00-BCFF
+    .cpu_data_out(acid_data_out),
+    
+    // Hardware register inputs
+    .sprite_control(8'h00),    // Not used in test
+    .sprite_collision(8'h00),  // Not used in test
+    .audio_control(8'h00),     // Not used in test
+    .audio_status(8'h00),      // Not used in test
+    .video_status(8'h00),      // Not used in test
+    
+    // ASIC RAM interface
+    .asic_ram_addr(cpu_addr[13:0]),
+    .asic_ram_rd(acid_ram_rd),  // Memory read from 4000-7FFF
+    .asic_ram_wr(acid_ram_wr),  // Memory write to 4000-7FFF
+    .asic_ram_din(cpu_dout),
+    .asic_ram_q(acid_ram_q),
+    
+    // Status outputs
+    .asic_valid(acid_valid),
+    .asic_status(acid_status)
+);
+
+// Register signals
+wire [7:0]  mrer;
+wire [7:0]  rom_select;
+wire [7:0]  ppi_control;
+
 // Add back Amstrad motherboard instantiation
 Amstrad_motherboard motherboard
 (
@@ -442,9 +522,7 @@ Amstrad_motherboard motherboard
     .crtc_type(1'b1),  // Type 1 CRTC
     .sync_filter(1'b1),
     .no_wait(1'b0),    // Enable proper wait states
-    .gx4000_mode(1'b0),
     .plus_mode(1'b0),
-    .plus_rom_loaded(1'b0),
 
     .tape_in(1'b0),
     .tape_out(),
@@ -486,7 +564,15 @@ Amstrad_motherboard motherboard
     .m1(m1),
     .irq(IRQ),
     .nmi(NMI),
-    .cursor(cursor)
+    .cursor(cursor),
+
+    // Register outputs from motherboard
+    .ram_config(ram_config),
+    .mrer(mrer),
+    .rom_select(rom_select),
+    .ppi_control(ppi_control),
+    .pen_registers(pen_registers),
+    .current_pen(current_pen)
 );
 
 // Video output conversion - expanding 2-bit color to 6-bit

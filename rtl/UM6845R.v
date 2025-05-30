@@ -95,25 +95,28 @@ end
 
 always @(posedge CLOCK) begin
 	if (ENABLE & ~nCS & ~R_nW) begin
-		if (~RS) addr <= DI[4:0];
+		if (~RS) begin
+			addr <= DI[4:0];
+			//$display("CRTC: Select register %d", DI[4:0]);
+		end
 		else begin
 			case (addr)
-				00: R0_h_total <= DI;
-				01: R1_h_displayed <= DI;
-				02: R2_h_sync_pos <= DI;
-				03: {R3_v_sync_width,R3_h_sync_width} <= DI;
-				04: R4_v_total <= DI[6:0];
-				05: R5_v_total_adj <= DI[4:0];
-				06: R6_v_displayed <= DI[6:0];
-				07: R7_v_sync_pos <= DI[6:0];
-				08: {R8_skew, R8_interlace} <= {DI[5:4],DI[1:0]};
-				09: R9_v_max_line <= DI[4:0];
-				10: {R10_cursor_mode,R10_cursor_start} <= DI[6:0];
-				11: R11_cursor_end <= DI[4:0];
-				12: R12_start_addr_h <= DI[5:0];
-				13: R13_start_addr_l <= DI[7:0];
-				14: R14_cursor_h <= DI[5:0];
-				15: R15_cursor_l <= DI[7:0];
+				00: begin R0_h_total <= DI; end //$display("CRTC: Write R0 (h_total) = %d", DI); end
+				01: begin R1_h_displayed <= DI; end // $display("CRTC: Write R1 (h_displayed) = %d", DI); end
+				02: begin R2_h_sync_pos <= DI; end //$display("CRTC: Write R2 (h_sync_pos) = %d", DI); end
+				03: begin {R3_v_sync_width,R3_h_sync_width} <= DI; end //$display("CRTC: Write R3 (v_sync_width=%d, h_sync_width=%d)", DI[7:4], DI[3:0]); end
+				04: begin R4_v_total <= DI[6:0]; end //$display("CRTC: Write R4 (v_total) = %d", DI[6:0]); end
+				05: begin R5_v_total_adj <= DI[4:0]; end //$display("CRTC: Write R5 (v_total_adj) = %d", DI[4:0]); end
+				06: begin R6_v_displayed <= DI[6:0]; end //$display("CRTC: Write R6 (v_displayed) = %d", DI[6:0]); end
+				07: begin R7_v_sync_pos <= DI[6:0]; end //$display("CRTC: Write R7 (v_sync_pos) = %d", DI[6:0]); end
+				08: begin {R8_skew, R8_interlace} <= {DI[5:4],DI[1:0]}; end //$display("CRTC: Write R8 (skew=%d, interlace=%d)", DI[5:4], DI[1:0]); end
+				09: begin R9_v_max_line <= DI[4:0]; end //$display("CRTC: Write R9 (v_max_line) = %d", DI[4:0]); end
+				10: begin {R10_cursor_mode,R10_cursor_start} <= DI[6:0]; end //$display("CRTC: Write R10 (cursor_mode=%d, cursor_start=%d)", DI[6:0], DI[4:0]); end
+				11: begin R11_cursor_end <= DI[4:0]; end //$display("CRTC: Write R11 (cursor_end) = %d", DI[4:0]); end
+				12: begin R12_start_addr_h <= DI[5:0]; end //$display("CRTC: Write R12 (start_addr_h) = %d", DI[5:0]); end
+				13: begin R13_start_addr_l <= DI[7:0]; end //$display("CRTC: Write R13 (start_addr_l) = %d", DI[7:0]); end
+				14: begin R14_cursor_h <= DI[5:0]; end //$display("CRTC: Write R14 (cursor_h) = %d", DI[5:0]); end
+				15: begin R15_cursor_l <= DI[7:0]; end //$display("CRTC: Write R15 (cursor_l) = %d", DI[7:0]); end
 			endcase
 		end
 	end
