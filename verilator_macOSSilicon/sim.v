@@ -455,7 +455,6 @@ GX4000_registers asic_regs
     .ram_config(ram_config),
     .rom_config(),        // Add empty connection for rom_config
     .rom_select(rom_select),
-    .ppi_control(ppi_control),
     .pen_registers(pen_registers),
     .current_pen(current_pen),
     .mrer(mrer)
@@ -497,7 +496,6 @@ GX4000_ACID acid_test
 // Register signals
 wire [7:0]  mrer;
 wire [7:0]  rom_select;
-wire [7:0]  ppi_control;
 
 // Add back Amstrad motherboard instantiation
 Amstrad_motherboard motherboard
@@ -522,7 +520,7 @@ Amstrad_motherboard motherboard
     .crtc_type(1'b1),  // Type 1 CRTC
     .sync_filter(1'b1),
     .no_wait(1'b0),    // Enable proper wait states
-    .plus_mode(1'b0),
+    .plus_mode(1'b1),  // Enable Plus mode to match GX4000_registers
 
     .tape_in(1'b0),
     .tape_out(),
@@ -570,7 +568,6 @@ Amstrad_motherboard motherboard
     .ram_config(ram_config),
     .mrer(mrer),
     .rom_select(rom_select),
-    .ppi_control(ppi_control),
     .pen_registers(pen_registers),
     .current_pen(current_pen)
 );

@@ -24,7 +24,6 @@ module GX4000_registers
     output reg [7:0] ram_config,
     output reg [7:0] rom_config,
     output reg [7:0] rom_select,
-    output reg [7:0] ppi_control,
     output reg [4:0] current_pen,
     output reg [7:0] pen_registers,
     output reg [7:0] mrer,
@@ -40,7 +39,6 @@ module GX4000_registers
     reg [7:0] ram_config_reg;        // RAM configuration register
     reg [7:0] rom_config_reg;        // ROM configuration register
     reg [7:0] rom_select_reg;        // ROM select register
-    reg [7:0] ppi_control_reg;       // PPI control register
     reg [7:0] mrer_reg;             // Memory and ROM Enable Register
     reg [2:0] bit_to_modify;        // Bit to modify in PPI port C
 
@@ -98,7 +96,6 @@ module GX4000_registers
             ram_config_reg <= 8'h00;
             rom_config_reg <= 8'h00;
             rom_select_reg <= 8'h00;
-            ppi_control_reg <= 8'h00;
             mrer_reg <= 8'h00;
             crtc_reg_select <= 8'h00;
             for (int i = 0; i < 32; i++) crtc_regs_reg[i] <= 8'h00;
@@ -254,7 +251,6 @@ module GX4000_registers
             
             if (ppi_wr && cpu_addr[7:0] == 8'h82 && !ppi_wr_prev) begin
                 // PPI control register - just pass through to i8255 module
-                ppi_control_reg <= cpu_data_in;
                 $display("ASIC: OUT on port f782, val=%02x", cpu_data_in);
                 $display("ASIC: PPI.control 0 => %d", cpu_data_in);
             end
@@ -315,7 +311,6 @@ module GX4000_registers
         ram_config = ram_config_reg;
         rom_config = rom_config_reg;
         rom_select = rom_select_reg;
-        ppi_control = ppi_control_reg;
         current_pen = current_pen_reg;
         pen_registers = asic_registers[current_pen_reg];
         mrer = mrer_reg;

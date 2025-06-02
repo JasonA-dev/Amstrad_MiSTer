@@ -34,6 +34,8 @@ module video (
 	input [7:0] VIDEO,
 	input [4:0]BORDER,
 	input [4:0]INKR[16],
+	input is_plus_mode,
+	input [11:0]PLUS_INKR[16],
 	input FORCE_BLANK, // u1801
 
 	output reg BLUE_OE_N,
@@ -94,8 +96,10 @@ wire [3:0] cidx = { shift_reg[1], shift_reg[5], shift_reg[3], shift_reg[7] };
 
 //////////// COLOUR MUX ///////////////
 wire [4:0] colour;
+wire [11:0] plus_colour;
 
 reg [15:0] ink_bits[5];
+reg [15:0] plus_ink_bits[12];
 always @(*) begin
 	for (integer i=0;i<16;i=i+1) begin
 		ink_bits[0][i] = INKR[i][0];
@@ -103,12 +107,28 @@ always @(*) begin
 		ink_bits[2][i] = INKR[i][2];
 		ink_bits[3][i] = INKR[i][3];
 		ink_bits[4][i] = INKR[i][4];
+		
+		// Plus mode color bits
+		plus_ink_bits[0][i] = PLUS_INKR[i][0];
+		plus_ink_bits[1][i] = PLUS_INKR[i][1];
+		plus_ink_bits[2][i] = PLUS_INKR[i][2];
+		plus_ink_bits[3][i] = PLUS_INKR[i][3];
+		plus_ink_bits[4][i] = PLUS_INKR[i][4];
+		plus_ink_bits[5][i] = PLUS_INKR[i][5];
+		plus_ink_bits[6][i] = PLUS_INKR[i][6];
+		plus_ink_bits[7][i] = PLUS_INKR[i][7];
+		plus_ink_bits[8][i] = PLUS_INKR[i][8];
+		plus_ink_bits[9][i] = PLUS_INKR[i][9];
+		plus_ink_bits[10][i] = PLUS_INKR[i][10];
+		plus_ink_bits[11][i] = PLUS_INKR[i][11];
 	end
 end
 
+// Standard mode color mux
+wire [4:0] std_colour;
 genvar i;
 generate
-	for (i=0; i<=4; i=i+1) begin : colour_mux
+	for (i=0; i<=4; i=i+1) begin : std_colour_mux
 		color_bit_mux color_bit_mux (
 			.clk(clk),
 			.cen_16(cen_16),
@@ -120,10 +140,35 @@ generate
 			.CIDX(cidx),
 			.MODE_IS_0(mode_is_0),
 			.MODE_IS_2(mode_is_2),
-			.INK(colour[i])
+			.INK(std_colour[i])
 		);
-	end 
+	end
 endgenerate
+
+// Plus mode color mux
+wire [11:0] plus_mode_colour;
+genvar j;
+generate
+	for (j=0; j<=11; j=j+1) begin : plus_colour_mux
+		color_bit_mux color_bit_mux (
+			.clk(clk),
+			.cen_16(cen_16),
+			.COLOUR_KEEP(colour_keep),
+			.BORDER_SEL(border_sel),
+			.BORDER(j < 5 ? BORDER[j] : 1'b0),
+			.INK_SEL(ink_sel),
+			.INKR(plus_ink_bits[j]),
+			.CIDX(cidx),
+			.MODE_IS_0(mode_is_0),
+			.MODE_IS_2(mode_is_2),
+			.INK(plus_mode_colour[j])
+		);
+	end
+endgenerate
+
+// Select between standard and plus mode colors
+assign colour = std_colour;
+assign plus_colour = plus_mode_colour;
 
 /////////// RGB DECODER ////////////
 
@@ -136,12 +181,23 @@ always @(posedge clk, posedge FORCE_BLANK) begin
 		RED_OE_N <= 0;
 		RED <= 0;
 	end else if (cen_16) begin
-		BLUE_OE_N <= ~((colour[1] | colour[2]) & (colour[3] | colour[4]));
-		BLUE <= colour[0];
-		GREEN_OE_N <= (colour[1] & colour[2]) | ~(colour[1] | colour[2] | colour[3] | colour[4]);
-		GREEN <= (~colour[2] & colour[0]) | colour[1];
-		RED_OE_N <= ~(colour[1] | colour[2] | colour[3] | colour[4]) | (colour[3] & colour[4]);
-		RED <= (colour[0] & ~colour[4]) | colour[3];
+		if (!is_plus_mode) begin
+			// Standard CPC color mode
+			BLUE_OE_N <= ~((colour[1] | colour[2]) & (colour[3] | colour[4]));
+			BLUE <= colour[0];
+			GREEN_OE_N <= (colour[1] & colour[2]) | ~(colour[1] | colour[2] | colour[3] | colour[4]);
+			GREEN <= (~colour[2] & colour[0]) | colour[1];
+			RED_OE_N <= ~(colour[1] | colour[2] | colour[3] | colour[4]) | (colour[3] & colour[4]);
+			RED <= (colour[0] & ~colour[4]) | colour[3];
+		end else begin
+			// Plus mode - direct 12-bit color
+			BLUE_OE_N <= 0;
+			BLUE <= plus_colour[0];
+			GREEN_OE_N <= 0;
+			GREEN <= plus_colour[4];
+			RED_OE_N <= 0;
+			RED <= plus_colour[8];
+		end
 	end
 end
 

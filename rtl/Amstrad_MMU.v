@@ -52,11 +52,13 @@ reg old_wr = 0;
 // Add registers for essential inputs
 reg [7:0] rom_select_reg;
 reg [7:0] ram_config_reg;
+reg [7:0] mrer_reg;
 
 always @(posedge CLK) begin
 	// Store essential input values
 	rom_select_reg <= rom_select;
 	ram_config_reg <= ram_config;
+	mrer_reg <= mrer;
 
 	if (reset) begin
 		ROMbank    <= 0;

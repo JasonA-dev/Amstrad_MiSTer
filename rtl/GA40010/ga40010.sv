@@ -174,6 +174,9 @@ reg        hromen;
 reg        lromen;
 reg        mode1;
 reg        mode0;
+reg        rmr2;  // Plus mode RMR2 register
+reg  [7:0] mrer;  // Memory and ROM Enable Register
+reg  [7:0] ram_config;  // RAM configuration register
 
 wire       reg_latch = (S[0] & S[7]) | (fast & ~E244_N);
 wire       reg_sel   = reg_latch & ~IORQ_N & ~A[15] & A[14] & M1_N;
@@ -181,6 +184,7 @@ wire       ink_en    = reg_sel & ~D[7] & ~D[6];
 wire       border_en = reg_sel & ~D[7] &  D[6] &  inksel[4];
 wire       ctrl_en   = reg_sel &  D[7] & ~D[6];
 wire       inkr_en   = reg_sel & ~D[7] &  D[6] & ~inksel[4];
+wire       rmr2_en   = reg_sel &  D[7] &  D[6] & D[5] & ~A[7];  // RMR2 register enable - must be port 0x7F00-0x7F7F
 
 assign     irq_reset = ctrl_en & D[4];
 
@@ -190,13 +194,44 @@ always @(posedge clk) begin
 	if (reset) {hromen, lromen, mode1, mode0} <= 0;
 	else if (ctrl_en) {hromen, lromen, mode1, mode0} <= D[3:0];
 	if (inkr_en) inkr[inksel[3:0]] <= D[4:0];
+	if (rmr2_en) begin
+		rmr2 <= D[0];  // RMR2 register write
+		$display("ASIC: RMR2 write: %x (port %04x)", D[0], {A[15:8], 8'h00});
+	end
+	if (reg_sel && A[7:0] == 8'h89) begin  // MRER write
+		mrer <= D;
+		// Lower 2 bits select screen mode
+		{mode1, mode0} <= D[1:0];
+		// If bit 4 is set, delay interrupt and reset scanline counter
+		if (D[4]) begin
+			INT_N <= 1;  // Clear interrupt
+			// TODO: Reset scanline counter
+		end
+		$display("ASIC: MRER write: %02x - mode=%d, lower_rom=%d, upper_rom=%d, int_delay=%d", 
+			D, D[1:0], !D[2], !D[3], D[4]);
+	end
+	if (reg_sel && A[7:0] == 8'hC0) begin  // RAM config write
+		ram_config <= D;
+		$display("ASIC: RAM config write: %02x", D);
+	end
 end
 
 assign MODE = {mode1, mode0};
 
 /////// ROM/RAM MAPPING /////////
 
-wire rom = (~lromen & ~A[15] & ~A[14]) | (~hromen & A[15] & A[14]);
+// Use MRER to control ROM enables
+wire lower_rom_enabled = !(mrer[2]);  // Bit 2: Lower ROM enable (0 = enabled)
+wire upper_rom_enabled = !(mrer[3]);  // Bit 3: Upper ROM enable (0 = enabled)
+
+// RAM bank selection based on RAM config
+wire [1:0] ram_bank = A[15:14] == 2'b11 ? ram_config[1:0] :  // Upper 16K
+                      A[15:14] == 2'b10 ? ram_config[3:2] :  // Middle 16K
+                      A[15:14] == 2'b01 ? ram_config[5:4] :  // Lower 16K
+                      ram_config[7:6];                       // Bottom 16K
+
+wire rom = (~lromen & ~A[15] & ~A[14] & lower_rom_enabled) | 
+           (~hromen & A[15] & A[14] & upper_rom_enabled);
 assign ROM = rom;
 assign ROMEN_N = ~rom | MREQ_N | RD_N;
 assign RAMRD_N =  rom | MREQ_N | RD_N;
@@ -270,29 +305,5 @@ video video_sync(
 	.RED_OE_N(RED_OE_N),
 	.RED(RED)
 );
-
-// Video signal handling
-always @(posedge clk) begin
-	if (cen_16) begin
-		// Debug CRTC signal changes
-		if (HSYNC_I != HSYNC_I_prev) begin
-			//$display("Gate Array: HSYNC_I changed to %b", HSYNC_I);
-			HSYNC_I_prev <= HSYNC_I;
-		end
-		if (VSYNC_I != VSYNC_I_prev) begin
-			//$display("Gate Array: VSYNC_I changed to %b", VSYNC_I);
-			VSYNC_I_prev <= VSYNC_I;
-		end
-		if (DISPEN != DISPEN_prev) begin
-			//$display("Gate Array: DISPEN changed to %b", DISPEN);
-			DISPEN_prev <= DISPEN;
-		end
-	end
-end
-
-// Add registers to track previous values
-reg HSYNC_I_prev;
-reg VSYNC_I_prev;
-reg DISPEN_prev;
 
 endmodule
