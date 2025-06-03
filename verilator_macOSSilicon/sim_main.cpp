@@ -273,7 +273,7 @@ int main(int argc, char** argv, char** env) {
 	//bus.QueueDownload("./OS6128.rom", 0, true);
 	//bus.QueueDownload("./original.rom", 0, true);
 	//bus.QueueDownload("./diagnostics.rom", 0, true);
-	//bus.QueueDownload("./cpr/Barbarian II (1990)(Ocean).cpr", 5, true);
+	bus.QueueDownload("./cpr/Barbarian II (1990)(Ocean).cpr", 5, true);
 
 #ifdef WIN32
 	MSG msg;

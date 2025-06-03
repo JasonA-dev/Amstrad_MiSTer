@@ -567,4 +567,75 @@ mock_sdram sdram (
     .tape_rd_ack()
 );
 
+// Cartridge signals
+wire [22:0] cart_rom_addr;
+wire [7:0]  cart_rom_data;
+wire        cart_rom_wr;
+wire        cart_rom_rd;
+wire [7:0]  cart_rom_q;
+wire        cart_auto_boot;
+wire [15:0] cart_boot_addr;
+wire [7:0]  cart_rom_type;
+wire [15:0] cart_rom_size;
+wire [15:0] cart_rom_checksum;
+wire [7:0]  cart_rom_version;
+wire [31:0] cart_rom_date;
+wire [63:0] cart_rom_title;
+wire        cart_plus_bios_valid;
+wire [15:0] cart_plus_bios_checksum;
+wire [7:0]  cart_plus_bios_version;
+
+// Instantiate cartridge module
+cartridge cart
+(
+    .clk_sys(clk_48),
+    .reset(RESET),
+    .gx4000_mode(1'b0),  // Not in GX4000 mode
+    .plus_mode(plus_rom_loaded),
+    
+    // Cartridge interface
+    .cart_addr({7'h00, cpu_addr}),  // Map CPU address to cartridge space
+    .cart_data(cpu_dout),
+    .cart_rd(mem_rd),
+    .cart_wr(mem_wr),
+    
+    // ROM loading interface
+    .ioctl_wr(ioctl_wr),
+    .ioctl_addr(ioctl_addr),
+    .ioctl_dout(ioctl_dout),
+    .ioctl_download(plus_download),
+    .ioctl_index(ioctl_index),
+    
+    // Memory interface
+    .rom_addr(cart_rom_addr),
+    .rom_data(cart_rom_data),
+    .rom_wr(cart_rom_wr),
+    .rom_rd(cart_rom_rd),
+    .rom_q(cart_rom_q),
+    
+    // Auto-boot interface
+    .auto_boot(cart_auto_boot),
+    .boot_addr(cart_boot_addr),
+    
+    // Cartridge information
+    .rom_type(cart_rom_type),
+    .rom_size(cart_rom_size),
+    .rom_checksum(cart_rom_checksum),
+    .rom_version(cart_rom_version),
+    .rom_date(cart_rom_date),
+    .rom_title(cart_rom_title),
+    
+    // Plus ROM validation outputs
+    .plus_bios_valid(cart_plus_bios_valid),
+    .plus_bios_checksum(cart_plus_bios_checksum),
+    .plus_bios_version(cart_plus_bios_version)
+);
+
+// Update plus_valid based on cartridge validation
+always @(posedge clk_48) begin
+    if (plus_download) begin
+        plus_valid <= cart_plus_bios_valid;
+    end
+end
+
 endmodule
