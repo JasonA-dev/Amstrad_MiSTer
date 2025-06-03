@@ -274,6 +274,8 @@ int main(int argc, char** argv, char** env) {
 	//bus.QueueDownload("./original.rom", 0, true);
 	//bus.QueueDownload("./diagnostics.rom", 0, true);
 	bus.QueueDownload("./cpr/Barbarian II (1990)(Ocean).cpr", 5, true);
+	//bus.QueueDownload("./cpr/Batman the Movie (1990)(Ocean).cpr", 5, true);
+	//bus.QueueDownload("./cpr/Fire and Forget 2 (1990)(Titus).cpr", 5, true);
 
 #ifdef WIN32
 	MSG msg;

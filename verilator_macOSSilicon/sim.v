@@ -86,24 +86,61 @@ always @(posedge clk_48) begin
     end
 end
 
+
 //----------------------------------------------------------------
 // Reset logic
 reg RESET = 1;
 reg rom_loaded = 0;
+reg plus_mode = 0;  // Start with Plus mode disabled
+
+// Add download tracking
+reg download_started = 0;
+reg [24:0] last_addr = 0;
+reg [24:0] download_addr = 0;  // Track actual download address
+
 always @(posedge clk_48) begin
     reg ioctl_downlD;
     ioctl_downlD <= ioctl_download;
     
-    // Only come out of reset when ROM download is complete
-    if (ioctl_downlD & ~ioctl_download) begin
+    // Track download progress
+    if (ioctl_download && ioctl_wr) begin
+        if (!download_started) begin
+            download_started <= 1;
+            download_addr <= 0;  // Start from 0
+            $display("DEBUG: Starting new download");
+        end else begin
+            download_addr <= download_addr + 1;
+        end
+        last_addr <= download_addr;
+    end
+    
+    // Come out of reset when CPR download starts
+    if (plus_download) begin
+        //$display("DEBUG: CPR Download starting, releasing reset");
+        RESET <= 0;
+    end
+    
+    // Handle download completion
+    if (ioctl_downlD && !ioctl_download) begin
         rom_loaded <= 1;
-        RESET <= 0;  // Release reset when ROM is loaded
+        if (plus_download & plus_valid) begin
+            plus_mode <= 1; // was 1
+        end
+        download_started <= 0;
+        RESET <= 0;
+        $display("DEBUG: Download complete at addr=%h, plus_download=%b, plus_valid=%b", 
+                 download_addr, plus_download, plus_valid);
     end
     
     // Only reset when explicitly requested
     if (reset) begin
         RESET <= 1;
         rom_loaded <= 0;
+        plus_mode <= 0;
+        download_started <= 0;
+        download_addr <= 0;
+        last_addr <= 0;
+        $display("DEBUG: External reset requested");
     end
 end
 //----------------------------------------------------------------
@@ -545,13 +582,13 @@ mock_sdram sdram (
     .clk(clk_48),
     .clkref(ce_ref),
 
-    // Use exact same logic as in Amstrad.sv
-    .oe   (RESET ? 1'b0      : mem_rd & ~mf2_ram_en),
-    .we   (RESET ? boot_wr   : mem_wr & ~mf2_ram_en & ~mf2_rom_en),
-    .addr (RESET ? boot_a    : mf2_rom_en ? { 9'h0ff, cpu_addr[13:0] } : ram_a),
-    .bank (RESET ? boot_bank : { 1'b0, model }),
-    .din  (RESET ? boot_dout : cpu_dout),
-    .dout (ram_dout),
+    // Memory interface - handle ROM downloads during reset, CPR during normal operation
+    .oe(RESET ? 1'b0 : mem_rd & ~mf2_ram_en),  // Allow reads during cartridge writes
+    .we(RESET ? (ioctl_download & ioctl_wr & rom_download) : (rom_wr | (mem_wr & ~mf2_ram_en & ~mf2_rom_en))),  // ROM writes during reset, cart during normal
+    .addr(RESET ? ioctl_addr[22:0] : (rom_wr ? rom_addr : mf2_rom_en ? { 9'h0ff, cpu_addr[13:0] } : ram_a)),  // Use ioctl addr during reset
+    .bank(2'b00),  // Cartridge data goes to bank 0
+    .din(RESET ? ioctl_dout : (rom_wr ? rom_data : cpu_dout)),  // Use ioctl data during reset
+    .dout(ram_dout),
 
     // Video memory access - match sdram.v exactly
     .vram_addr({2'b10, vram_addr, 1'b0}),
@@ -568,11 +605,12 @@ mock_sdram sdram (
 );
 
 // Cartridge signals
-wire [22:0] cart_rom_addr;
-wire [7:0]  cart_rom_data;
-wire        cart_rom_wr;
-wire        cart_rom_rd;
-wire [7:0]  cart_rom_q;
+wire [22:0] rom_addr;
+wire [7:0]  rom_data;
+wire        rom_wr;
+wire        rom_rd;
+wire [7:0]  rom_q;
+
 wire        cart_auto_boot;
 wire [15:0] cart_boot_addr;
 wire [7:0]  cart_rom_type;
@@ -590,14 +628,7 @@ cartridge cart
 (
     .clk_sys(clk_48),
     .reset(RESET),
-    .gx4000_mode(1'b0),  // Not in GX4000 mode
     .plus_mode(plus_rom_loaded),
-    
-    // Cartridge interface
-    .cart_addr({7'h00, cpu_addr}),  // Map CPU address to cartridge space
-    .cart_data(cpu_dout),
-    .cart_rd(mem_rd),
-    .cart_wr(mem_wr),
     
     // ROM loading interface
     .ioctl_wr(ioctl_wr),
@@ -607,11 +638,11 @@ cartridge cart
     .ioctl_index(ioctl_index),
     
     // Memory interface
-    .rom_addr(cart_rom_addr),
-    .rom_data(cart_rom_data),
-    .rom_wr(cart_rom_wr),
-    .rom_rd(cart_rom_rd),
-    .rom_q(cart_rom_q),
+    .rom_addr(rom_addr),
+    .rom_data(rom_data),
+    .rom_wr(rom_wr),
+    .rom_rd(rom_rd),
+    .rom_q(rom_q),
     
     // Auto-boot interface
     .auto_boot(cart_auto_boot),
