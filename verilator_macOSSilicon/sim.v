@@ -391,6 +391,7 @@ wire acid_io_wr = mem_wr && (cpu_addr[15:8] == 8'hBC);
 wire acid_ram_rd = mem_rd && (cpu_addr >= 16'h4000) && (cpu_addr <= 16'h7FFF);
 wire acid_ram_wr = mem_wr && (cpu_addr >= 16'h4000) && (cpu_addr <= 16'h7FFF);
 
+/*
 // ASIC I/O test instance
 ASIC_io gx4000_io_test
 (
@@ -436,6 +437,7 @@ ASIC_io gx4000_io_test
     .peripheral_ready(peripheral_ready),
     .peripheral_ack(1'b0)
 );
+*/
 
 // ASIC registers instance
 ASIC_registers asic_regs
