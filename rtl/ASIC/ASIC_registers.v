@@ -26,11 +26,7 @@ module ASIC_registers
     output reg [7:0] rom_select,
     output reg [4:0] current_pen,
     output reg [7:0] pen_registers,
-    output reg [7:0] mrer,
-
-    // Add breakpoint control
-    output reg [31:0] break_point,  // Breakpoint address
-    input      [31:0] current_pc    // Current program counter
+    output reg [7:0] mrer
 );
 
     // ASIC 16K memory (mapped 4000h-7FFFh)
@@ -194,7 +190,6 @@ module ASIC_registers
             ppi_port_a <= 8'h00;
             ppi_port_b <= 8'h00;
             ppi_port_c <= 8'h00;
-            break_point <= 32'hFFFFFFFF;
             crtc_select_prev <= 8'h00;
             rom_config_prev <= 8'h00;
             rom_sel_prev <= 8'h00;

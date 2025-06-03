@@ -272,7 +272,8 @@ int main(int argc, char** argv, char** env) {
 	// Example downloads
 	//bus.QueueDownload("./OS6128.rom", 0, true);
 	//bus.QueueDownload("./original.rom", 0, true);
-	bus.QueueDownload("./diagnostics.rom", 0, true);
+	//bus.QueueDownload("./diagnostics.rom", 0, true);
+	//bus.QueueDownload("./cpr/Barbarian II (1990)(Ocean).cpr", 5, true);
 
 #ifdef WIN32
 	MSG msg;
@@ -351,11 +352,11 @@ int main(int argc, char** argv, char** env) {
 				ImGui::EndTabItem();
 			}
 			if (ImGui::BeginTabItem("ASIC MEM (16K)")) {
-				mem_edit.DrawContents(&top->top__DOT__asic_regs__DOT__asic_memory[0], 16384, 0); // 16K
+				mem_edit.DrawContents(&top->top__DOT__asic__DOT__asic_regs__DOT__asic_memory[0], 16384, 0); // 16K
 				ImGui::EndTabItem();
 			}
 			if (ImGui::BeginTabItem("ASIC Palette")) {
-				mem_edit.DrawContents(&top->top__DOT__asic_regs__DOT__palette_mem[0], 16, 0); // 16
+				mem_edit.DrawContents(&top->top__DOT__asic__DOT__asic_regs__DOT__palette_mem[0], 16, 0); // 16
 				ImGui::EndTabItem();
 			}
 			ImGui::EndTabBar();
@@ -397,20 +398,20 @@ int main(int argc, char** argv, char** env) {
 		ImGui::SetWindowPos("ASIC Registers", ImVec2(0, 570), ImGuiCond_Once);
 		ImGui::SetWindowSize("ASIC Registers", ImVec2(500, 200), ImGuiCond_Once);
 		ImGui::Text("ASIC Registers:"); 
-		ImGui::Text("ROM Select:       0x%01X", top->top__DOT__asic_regs__DOT__rom_select);  
-		ImGui::Text("ROM Config:       0x%01X", top->top__DOT__asic_regs__DOT__rom_config);  
-		ImGui::Text("RAM Config:       0x%01X", top->top__DOT__asic_regs__DOT__ram_config); 
+		ImGui::Text("ROM Select:       0x%01X", top->top__DOT__asic__DOT__asic_regs__DOT__rom_select);  
+		ImGui::Text("ROM Config:       0x%01X", top->top__DOT__asic__DOT__asic_regs__DOT__rom_config);  
+		ImGui::Text("RAM Config:       0x%01X", top->top__DOT__asic__DOT__asic_regs__DOT__ram_config); 
 		ImGui::Separator();
 		ImGui::Text("I/O space registers:");
-		ImGui::Text("Mrer:         0x%01X", top->top__DOT__asic_regs__DOT__mrer_reg);  
-		ImGui::Text("Rmr2:         0x%01X", top->top__DOT__asic_regs__DOT__rmr2_reg);  
-		ImGui::Text("Ram map:      0x%01X", top->top__DOT__asic_regs__DOT__ram_map_reg);  
-		ImGui::Text("Rom sel:      0x%01X", top->top__DOT__asic_regs__DOT__rom_sel_reg); 
+		ImGui::Text("Mrer:         0x%01X", top->top__DOT__asic__DOT__asic_regs__DOT__mrer_reg);  
+		ImGui::Text("Rmr2:         0x%01X", top->top__DOT__asic__DOT__asic_regs__DOT__rmr2_reg);  
+		ImGui::Text("Ram map:      0x%01X", top->top__DOT__asic__DOT__asic_regs__DOT__ram_map_reg);  
+		ImGui::Text("Rom sel:      0x%01X", top->top__DOT__asic__DOT__asic_regs__DOT__rom_sel_reg); 
 		ImGui::Separator(); 
-		ImGui::Text("ASIC Palette ptr:     0x%01X", top->top__DOT__asic_regs__DOT__palette_ptr);  
+		ImGui::Text("ASIC Palette ptr:     0x%01X", top->top__DOT__asic__DOT__asic_regs__DOT__palette_ptr);  
 		ImGui::Separator();
-		ImGui::Text("ACID POS:        0x%01X", top->top__DOT__asic_regs__DOT__acid_pos); 
-		ImGui::Text("ACID UNLOCK:     0x%01X", top->top__DOT__asic_regs__DOT__acid_unlock_reg); 
+		ImGui::Text("ACID POS:        0x%01X", top->top__DOT__asic__DOT__asic_regs__DOT__acid_pos); 
+		ImGui::Text("ACID UNLOCK:     0x%01X", top->top__DOT__asic__DOT__asic_regs__DOT__acid_unlock_reg); 
 		ImGui::End();
 
 		

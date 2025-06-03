@@ -391,108 +391,51 @@ wire acid_io_wr = mem_wr && (cpu_addr[15:8] == 8'hBC);
 wire acid_ram_rd = mem_rd && (cpu_addr >= 16'h4000) && (cpu_addr <= 16'h7FFF);
 wire acid_ram_wr = mem_wr && (cpu_addr >= 16'h4000) && (cpu_addr <= 16'h7FFF);
 
-/*
-// ASIC I/O test instance
-ASIC_io gx4000_io_test
-(
-    .clk_sys(clk_48),
-    .reset(RESET),
-    .gx4000_mode(1'b1),  // Enable for testing
-    .plus_mode(1'b1),    // Enable for testing
-    
-    // CPU interface
-    .cpu_addr(cpu_addr),
-    .cpu_data(cpu_dout),
-    .cpu_wr(io_wr),
-    .cpu_rd(io_rd),
-    .io_dout(gx4000_io_dout),
-    
-    // Joystick interface
-    .joy1(joy1),
-    .joy2(joy2),
-    .joy_swap(1'b0),
-    
-    // Printer interface
-    .printer_data(printer_data),
-    .printer_strobe(printer_strobe),
-    .printer_busy(1'b0),
-    .printer_ack(1'b0),
-    
-    // RS232 interface
-    .rs232_data(rs232_data),
-    .rs232_tx(rs232_tx),
-    .rs232_rx(1'b0),
-    .rs232_rts(rs232_rts),
-    .rs232_cts(1'b0),
-    
-    // Playcity interface
-    .playcity_data(playcity_data),
-    .playcity_wr(playcity_wr),
-    .playcity_rd(playcity_rd),
-    .playcity_din(8'h00),
-    .playcity_ready(1'b0),
-    
-    // Peripheral interface
-    .peripheral_data(peripheral_data),
-    .peripheral_ready(peripheral_ready),
-    .peripheral_ack(1'b0)
-);
-*/
+// ASIC signals
+wire [7:0] asic_data_out;
+wire asic_data_out_en;
+wire [7:0] ppi_port_a;
+wire [7:0] ppi_port_b;
+wire [7:0] ppi_port_c;
+wire [7:0] crtc_regs[0:31];
+wire [7:0] crtc_reg_select;
+wire acid_unlocked;
+wire [7:0] rom_config;
+wire [7:0] rom_select;
+wire [31:0] break_point;
 
-// ASIC registers instance
-ASIC_registers asic_regs
+// Instantiate ASIC
+ASIC asic
 (
     .clk_sys(clk_48),
     .reset(RESET),
-    .plus_mode(1'b1),    // Enable for testing
+    .plus_mode(plus_rom_loaded),
     
     // CPU interface
     .cpu_addr(cpu_addr),
     .cpu_data_in(cpu_dout),
     .cpu_wr(io_wr),
     .cpu_rd(io_rd),
-    .cpu_data_out(asic_data_out),
+    .cpu_data_out(cpu_data_out),
+    .cpu_data_out_en(cpu_data_out_en),
+    .asic_data_out(asic_data_out),
+    .asic_data_out_en(asic_data_out_en),
     
-    // Register outputs
+    // Video outputs
+    .ppi_port_a(ppi_port_a),
+    .ppi_port_b(ppi_port_b),
+    .ppi_port_c(ppi_port_c),
+    .crtc_regs(crtc_regs),
+    .crtc_reg_select(crtc_reg_select),
+    .acid_unlocked(acid_unlocked),
+    
+    // Configuration outputs
     .ram_config(ram_config),
-    .rom_config(),        // Add empty connection for rom_config
+    .rom_config(rom_config),
     .rom_select(rom_select),
-    .pen_registers(pen_registers),
     .current_pen(current_pen),
+    .pen_registers(pen_registers),
     .mrer(mrer)
-);
-
-// ACID test instance
-ASIC_ACID acid_test
-(
-    .clk_sys(clk_48),
-    .reset(RESET),
-    .plus_mode(1'b1),    // Enable for testing
-    
-    // CPU interface
-    .cpu_addr(cpu_addr),
-    .cpu_data_in(cpu_dout),
-    .cpu_wr(acid_io_wr),  // Memory write to BC00-BCFF
-    .cpu_rd(acid_io_rd),  // Memory read from BC00-BCFF
-    .cpu_data_out(acid_data_out),
-    
-    // Hardware register inputs
-    .sprite_control(8'h00),    // Not used in test
-    .sprite_collision(8'h00),  // Not used in test
-    .audio_control(8'h00),     // Not used in test
-    .audio_status(8'h00),      // Not used in test
-    .video_status(8'h00),      // Not used in test
-    
-    // ASIC RAM interface
-    .asic_ram_addr(cpu_addr[13:0]),
-    .asic_ram_rd(acid_ram_rd),  // Memory read from 4000-7FFF
-    .asic_ram_wr(acid_ram_wr),  // Memory write to 4000-7FFF
-    .asic_ram_din(cpu_dout),
-    .asic_ram_q(acid_ram_q),
-    
-    // Status outputs
-    .asic_valid(acid_valid),
-    .asic_status(acid_status)
 );
 
 // Register signals

@@ -1,4 +1,4 @@
-module ASIC_cartridge
+module cartridge
 (
     input         clk_sys,
     input         reset,
