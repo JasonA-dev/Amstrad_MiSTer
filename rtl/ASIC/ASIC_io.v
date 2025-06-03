@@ -1,4 +1,4 @@
-module GX4000_io
+module ASIC_io
 (
     input         clk_sys,
     input         reset,

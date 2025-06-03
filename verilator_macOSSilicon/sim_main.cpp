@@ -73,7 +73,7 @@ const int input_pause   = 11;
 // -----
 #define VGA_ROTATE 0
 #define VGA_WIDTH  400
-#define VGA_HEIGHT 200
+#define VGA_HEIGHT 300
 #define VGA_SCALE_X vga_scale
 #define VGA_SCALE_Y vga_scale
 SimVideo video(VGA_WIDTH, VGA_HEIGHT, VGA_ROTATE);
@@ -347,7 +347,11 @@ int main(int argc, char** argv, char** env) {
 		ImGui::SetWindowSize("Memory Editor", ImVec2(500, 200), ImGuiCond_Once);
 		if (ImGui::BeginTabBar("##memory_editor")) {
 			if (ImGui::BeginTabItem("RAM (8MB)")) {
-				mem_edit.DrawContents(&top->top__DOT__sdram__DOT__ram[0], 8388608, 0); // 64K
+				mem_edit.DrawContents(&top->top__DOT__sdram__DOT__ram[0], 8388608, 0); // 8MB
+				ImGui::EndTabItem();
+			}
+			if (ImGui::BeginTabItem("ASIC MEM (16K)")) {
+				mem_edit.DrawContents(&top->top__DOT__asic_regs__DOT__asic_memory[0], 16384, 0); // 16K
 				ImGui::EndTabItem();
 			}
 			ImGui::EndTabBar();

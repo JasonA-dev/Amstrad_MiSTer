@@ -1,4 +1,4 @@
-module GX4000_audio
+module ASIC_audio
 (
     input         clk_sys,
     input         reset,

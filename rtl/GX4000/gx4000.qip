@@ -1,6 +1,0 @@
-set_global_assignment -name VERILOG_FILE GX4000_io.v
-set_global_assignment -name SYSTEMVERILOG_FILE GX4000_video.sv
-set_global_assignment -name SYSTEMVERILOG_FILE GX4000_ACID.sv
-set_global_assignment -name SYSTEMVERILOG_FILE GX4000_audio.sv
-set_global_assignment -name SYSTEMVERILOG_FILE GX4000_sprite.sv
-set_global_assignment -name VERILOG_FILE GX4000_cartridge.v

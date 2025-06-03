@@ -1231,10 +1231,12 @@ module tv80_core (/*AUTOARG*/
                       if (!NMICycle)
                         IntE_FF1 <= #1 1'b1;
                       IntE_FF2 <= #1 1'b1;
+                      //$display("TV80: EI - Interrupts Enabled");
                     end
                   if (I_RETN == 1'b1 ) 
                     begin
                       IntE_FF1 <= #1 IntE_FF2;
+                      //$display("TV80: RETN - Restored Interrupt State: %b", IntE_FF2);
                     end
                 end
               if (tstate[3] ) 
@@ -1243,11 +1245,18 @@ module tv80_core (/*AUTOARG*/
                     begin
                       IntE_FF1 <= #1 1'b0;
                       IntE_FF2 <= #1 1'b0;
+                      //$display("TV80: DI - Interrupts Disabled");
                     end
                 end
               if (IntCycle == 1'b1 || NMICycle == 1'b1 ) 
                 begin
                   Halt_FF <= #1 1'b0;
+                  if (IntCycle == 1'b1) begin
+                    //$display("TV80: Interrupt Mode %b, IntE: %b", IMode, IntE_FF1);
+                    if (IMode == 2'b01) begin
+                      //$display("TV80: Mode 1 Interrupt - Jumping to 0x0038");
+                    end
+                  end
                 end
               if (mcycle[0] && tstate[2] && wait_n == 1'b1 ) 
                 begin

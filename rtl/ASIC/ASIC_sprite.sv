@@ -1,4 +1,4 @@
-module GX4000_sprite
+module ASIC_sprite
 (
     input         clk_sys,
     input         reset,

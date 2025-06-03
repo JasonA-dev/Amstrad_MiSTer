@@ -1,0 +1,7 @@
+set_global_assignment -name VERILOG_FILE ASIC_io.v
+set_global_assignment -name SYSTEMVERILOG_FILE ASIC_video.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ASIC_ACID.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ASIC_audio.sv
+set_global_assignment -name SYSTEMVERILOG_FILE ASIC_sprite.sv
+set_global_assignment -name VERILOG_FILE ASIC_cartridge.v
+set_global_assignment -name VERILOG_FILE ASIC_registers.v

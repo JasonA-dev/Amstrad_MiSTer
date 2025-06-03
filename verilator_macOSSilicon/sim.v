@@ -1,7 +1,7 @@
 `timescale 1ns/1ns
 
-// Include GX4000_io module
-`include "../rtl/GX4000/GX4000_io.v"
+// Include ASIC_io module
+`include "../rtl/ASIC/ASIC_io.v"
 
 module top (
     input  wire        clk_48,
@@ -391,8 +391,8 @@ wire acid_io_wr = mem_wr && (cpu_addr[15:8] == 8'hBC);
 wire acid_ram_rd = mem_rd && (cpu_addr >= 16'h4000) && (cpu_addr <= 16'h7FFF);
 wire acid_ram_wr = mem_wr && (cpu_addr >= 16'h4000) && (cpu_addr <= 16'h7FFF);
 
-// GX4000 I/O test instance
-GX4000_io gx4000_io_test
+// ASIC I/O test instance
+ASIC_io gx4000_io_test
 (
     .clk_sys(clk_48),
     .reset(RESET),
@@ -438,7 +438,7 @@ GX4000_io gx4000_io_test
 );
 
 // ASIC registers instance
-GX4000_registers asic_regs
+ASIC_registers asic_regs
 (
     .clk_sys(clk_48),
     .reset(RESET),
@@ -461,7 +461,7 @@ GX4000_registers asic_regs
 );
 
 // ACID test instance
-GX4000_ACID acid_test
+ASIC_ACID acid_test
 (
     .clk_sys(clk_48),
     .reset(RESET),

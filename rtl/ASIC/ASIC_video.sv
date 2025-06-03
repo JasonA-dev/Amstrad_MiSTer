@@ -1,4 +1,4 @@
-module GX4000_video
+module ASIC_video
 (
     input         clk_sys,
     input         reset,

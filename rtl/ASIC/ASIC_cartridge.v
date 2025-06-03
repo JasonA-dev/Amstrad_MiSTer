@@ -1,4 +1,4 @@
-module GX4000_cartridge
+module ASIC_cartridge
 (
     input         clk_sys,
     input         reset,

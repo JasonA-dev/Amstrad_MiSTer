@@ -256,7 +256,7 @@ module tv80_mcode
       I_INRC = 1'b0;
       SetDI = 1'b0;
       SetEI = 1'b0;
-      IMode = 2'b11;
+      IMode <= "01";  // Changed from "11" to "01" to default to interrupt mode 1
       Halt = 1'b0;
       NoRead = 1'b0;
       Write = 1'b0;

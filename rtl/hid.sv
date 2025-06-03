@@ -53,7 +53,7 @@ wire [6:0] joy2 = row6 ? {joystick2[6:4], joystick2[0], joystick2[1], joystick2[
 reg [7:0] key[16] = '{default:0};
 reg alt = 0;
 
-wire press = ps2_key[9];
+wire press = ~ps2_key[9];
 always @(posedge clk) begin
 	reg old_flg, old_reset;
 

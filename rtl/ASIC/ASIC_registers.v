@@ -1,4 +1,4 @@
-module GX4000_registers
+module ASIC_registers
 (
     input         clk_sys,
     input         reset,
@@ -41,6 +41,12 @@ module GX4000_registers
     reg [7:0] rom_select_reg;        // ROM select register
     reg [7:0] mrer_reg;             // Memory and ROM Enable Register
     reg [2:0] bit_to_modify;        // Bit to modify in PPI port C
+
+    // ASIC 16K memory
+    reg [7:0] asic_memory[0:16383];  // 16K memory for ASIC
+    wire asic_mem_access = (cpu_addr[15:14] == 2'b01);  // 16K at 4000-7FFF
+    wire asic_mem_wr = asic_mem_access && cpu_wr;
+    wire asic_mem_rd = asic_mem_access && cpu_rd;
 
     // Address decode
     wire reg_wr = cpu_wr && (cpu_addr[15:8] == 8'h7F);
@@ -128,6 +134,11 @@ module GX4000_registers
             last_f600_wr <= 1'b0;
             last_f600_data <= 8'h00;
             f600_wr_prev <= 1'b0;
+
+            // Initialize ASIC memory if needed
+            for (int i = 0; i < 16384; i++) begin
+                asic_memory[i] = 8'h00;  // Changed from <= to = for initialization
+            end
         end else begin
             // Store previous states for edge detection
             crtc_select_prev <= crtc_select_wr;
@@ -193,11 +204,54 @@ module GX4000_registers
                         end
                     end
 
+                    // RAM configuration registers
                     8'hC0: begin
-                        // RAM configuration register
-                        ram_config_reg <= cpu_data_in;
+                        // RAM config C0: 64K RAM at 0x0000
+                        ram_config_reg <= 8'hC0;
                         $display("ASIC: OUT on port 7fc0, val=%02x", cpu_data_in);
-                        $display("ASIC: RAM config: %02x", cpu_data_in);
+                        $display("ASIC: RAM config C0: 64K RAM at 0x0000");
+                    end
+                    8'hC1: begin
+                        // RAM config C1: 128K RAM at 0x0000
+                        ram_config_reg <= 8'hC1;
+                        $display("ASIC: OUT on port 7fc1, val=%02x", cpu_data_in);
+                        $display("ASIC: RAM config C1: 128K RAM at 0x0000");
+                    end
+                    8'hC2: begin
+                        // RAM config C2: 192K RAM at 0x0000
+                        ram_config_reg <= 8'hC2;
+                        $display("ASIC: OUT on port 7fc2, val=%02x", cpu_data_in);
+                        $display("ASIC: RAM config C2: 192K RAM at 0x0000");
+                    end
+                    8'hC3: begin
+                        // RAM config C3: 256K RAM at 0x0000
+                        ram_config_reg <= 8'hC3;
+                        $display("ASIC: OUT on port 7fc3, val=%02x", cpu_data_in);
+                        $display("ASIC: RAM config C3: 256K RAM at 0x0000");
+                    end
+                    8'hC4: begin
+                        // RAM config C4: 320K RAM at 0x0000
+                        ram_config_reg <= 8'hC4;
+                        $display("ASIC: OUT on port 7fc4, val=%02x", cpu_data_in);
+                        $display("ASIC: RAM config C4: 320K RAM at 0x0000");
+                    end
+                    8'hC5: begin
+                        // RAM config C5: 384K RAM at 0x0000
+                        ram_config_reg <= 8'hC5;
+                        $display("ASIC: OUT on port 7fc5, val=%02x", cpu_data_in);
+                        $display("ASIC: RAM config C5: 384K RAM at 0x0000");
+                    end
+                    8'hC6: begin
+                        // RAM config C6: 448K RAM at 0x0000
+                        ram_config_reg <= 8'hC6;
+                        $display("ASIC: OUT on port 7fc6, val=%02x", cpu_data_in);
+                        $display("ASIC: RAM config C6: 448K RAM at 0x0000");
+                    end
+                    8'hC7: begin
+                        // RAM config C7: 512K RAM at 0x0000
+                        ram_config_reg <= 8'hC7;
+                        $display("ASIC: OUT on port 7fc7, val=%02x", cpu_data_in);
+                        $display("ASIC: RAM config C7: 512K RAM at 0x0000");
                     end
                     
                     8'h89: begin
@@ -279,6 +333,11 @@ module GX4000_registers
                 $display("ASIC: OUT on port f600, val=%02x", cpu_data_in);
                 $display("ASIC: F600 port write: %d", cpu_data_in);
             end
+
+            if (asic_mem_wr) begin
+                asic_memory[cpu_addr[13:0]] <= cpu_data_in;
+                $display("ASIC: Write to memory at %04x, val=%02x", cpu_addr, cpu_data_in);
+            end
         end
     end
 
@@ -289,7 +348,12 @@ module GX4000_registers
         asic_data_out = 8'hFF;  // Default ASIC data output
         asic_data_out_en = 0;   // Default ASIC data output enable
 
-        if (reg_rd) begin
+        if (asic_mem_rd) begin
+            cpu_data_out = asic_memory[cpu_addr[13:0]];
+            cpu_data_out_en = 1;
+            $display("ASIC: Read from memory at %04x, val=%02x", cpu_addr, asic_memory[cpu_addr[13:0]]);
+        end
+        else if (reg_rd) begin
             case (cpu_addr[7:0])
                 8'h00: begin cpu_data_out = ppi_port_a; cpu_data_out_en = 1; end
                 8'h01: begin cpu_data_out = ppi_port_b; cpu_data_out_en = 1; end
