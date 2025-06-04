@@ -87,7 +87,8 @@ module Amstrad_motherboard
 	input  [7:0] rom_select,
 	input  [7:0] ppi_control,
 	input  [7:0] pen_registers,
-	input  [4:0] current_pen
+	input  [4:0] current_pen,
+	input  [7:0] rmr2
 );
 
 wire crtc_shift;
@@ -269,6 +270,10 @@ ga40010 GateArray (
 	.HSYNC_I(crtc_hs),
 	.VSYNC_I(crtc_vs),
 	.DISPEN(crtc_de),
+
+	.mrer(mrer),
+	.rmr2(rmr2),
+
 	.CCLK(),
 	.CCLK_EN_P(cclk_en_p),
 	.CCLK_EN_N(cclk_en_n),

@@ -436,9 +436,11 @@ wire [7:0] ppi_port_b;
 wire [7:0] ppi_port_c;
 wire [7:0] crtc_regs[0:31];
 wire [7:0] crtc_reg_select;
+
 wire acid_unlocked;
-wire [7:0] rom_config;
-wire [7:0] rom_select;
+
+wire [7:0]  rom_config;
+wire [7:0]  rom_select;
 wire [31:0] break_point;
 
 // Instantiate ASIC
@@ -472,14 +474,15 @@ ASIC asic
     .rom_select(rom_select),
     .current_pen(current_pen),
     .pen_registers(pen_registers),
-    .mrer(mrer)
+    .mrer(mrer),
+    .rmr2(rmr2)
 );
 
-// Register signals
+// ASIC Register signals
 wire [7:0]  mrer;
 wire [7:0]  rom_select;
+wire [7:0]  rmr2;
 
-// Add back Amstrad motherboard instantiation
 Amstrad_motherboard motherboard
 (
     .reset(RESET),
@@ -546,12 +549,13 @@ Amstrad_motherboard motherboard
     .nmi(NMI),
     .cursor(cursor),
 
-    // Register outputs from motherboard
+    // Register outputs from ASIC to motherboard
     .ram_config(ram_config),
     .mrer(mrer),
     .rom_select(rom_select),
     .pen_registers(pen_registers),
-    .current_pen(current_pen)
+    .current_pen(current_pen),
+    .rmr2(rmr2)
 );
 
 // Video output conversion - expanding 2-bit color to 6-bit

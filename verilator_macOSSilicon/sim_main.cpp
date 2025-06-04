@@ -271,7 +271,7 @@ int main(int argc, char** argv, char** env) {
 
 	// ROM downloads
 	//bus.QueueDownload("./OS6128.rom", 0, true);
-	bus.QueueDownload("./original.rom", 0, true);
+	//bus.QueueDownload("./original.rom", 0, true);
 	//bus.QueueDownload("./diagnostics.rom", 0, true);
 	//bus.QueueDownload("./CPC_PLUS.CPR", 5, true);
 
@@ -280,7 +280,7 @@ int main(int argc, char** argv, char** env) {
 	//bus.QueueDownload("./cpr/Batman the Movie (1990)(Ocean).cpr", 5, true);  			// Frame
 	//bus.QueueDownload("./cpr/Batman the Movie (1990)(Ocean)[a].cpr", 5, true);  		// Frame
 	//bus.QueueDownload("./cpr/Burnin' Rubber (1990)(Ocean).cpr", 5, true); 			// NO Frame
-	//bus.QueueDownload("./cpr/Crazy Cars 2 (1990)(Titus).cpr", 5, true);  				// NO Frame, ROM Config 89, RMR2 B8
+	bus.QueueDownload("./cpr/Crazy Cars 2 (1990)(Titus).cpr", 5, true);  				// NO Frame, ROM Config 89, RMR2 B8
 	//bus.QueueDownload("./cpr/Crazy Cars 2 (1990)(Titus)[a].cpr", 5, true);  			// NO Frame
 	//bus.QueueDownload("./cpr/Dick Tracy (1990)(Titus).cpr", 5, true);  				// Frame
 	//bus.QueueDownload("./cpr/Enforcer, The (1990)(Trojan).cpr", 5, true);  			// Frame
@@ -453,6 +453,14 @@ int main(int argc, char** argv, char** env) {
 		ImGui::Text("ACID UNLOCK:     0x%01X", top->top__DOT__asic__DOT__asic_regs__DOT__acid_unlock_reg); 
 		ImGui::End();
 
+		ImGui::Begin("Gate Array");
+		ImGui::SetWindowPos("Gate Array", ImVec2(0, 570), ImGuiCond_Once);
+		ImGui::SetWindowSize("Gate Array", ImVec2(500, 200), ImGuiCond_Once);
+		ImGui::Text("Gate Array Registers:"); 
+		ImGui::Text("MRER:       0x%01X", top->top__DOT__motherboard__DOT__GateArray__DOT__mrer);  
+		ImGui::Text("RMR2:       0x%01X", top->top__DOT__motherboard__DOT__GateArray__DOT__rmr2);  
+
+		ImGui::End();
 		
 		// VDP Debug window
 		ImGui::Begin("VDP Debug");

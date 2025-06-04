@@ -26,7 +26,8 @@ module ASIC_registers
     output reg [7:0] rom_select,
     output reg [4:0] current_pen,
     output reg [7:0] pen_registers,
-    output reg [7:0] mrer
+    output reg [7:0] mrer,
+    output reg [7:0] rmr2
 );
 
     // ASIC 16K memory (mapped 4000h-7FFFh)
@@ -554,6 +555,7 @@ module ASIC_registers
         crtc_reg_select <= crtc_select_reg;
         crtc_regs_reg <= crtc_regs;
         acid_unlocked <= acid_unlock_reg;
+        rmr2 <= rmr2_reg;
     end
 
 endmodule 

@@ -41,7 +41,7 @@ module ga40010 (
 	input  DISPEN,
 
     input reg [7:0] mrer,
-	input RMR2_en,
+	input reg [7:0] rmr2,
 
 	output CCLK,
 	output CCLK_EN_P,
@@ -179,6 +179,7 @@ reg        mode1_int;
 reg        mode0_int;
 
 reg 	   RMR2;
+assign     RMR2 = rmr2;
 
 wire       reg_latch = (S[0] & S[7]) | (fast & ~E244_N);
 wire       reg_sel   = reg_latch & ~IORQ_N & ~A[15] & A[14] & M1_N;
@@ -198,7 +199,7 @@ always @(posedge clk) begin
 end
 
 // Use MRER for Plus models if set, else use internal logic
-wire use_mrer = (mrer !== 8'b0);
+wire use_mrer = 1'b0; //(mrer !== 8'b0);
 wire mode1 = use_mrer ? mrer[1] : mode1_int;
 wire mode0 = use_mrer ? mrer[0] : mode0_int;
 assign MODE = {mode1, mode0};

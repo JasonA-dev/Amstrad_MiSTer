@@ -29,6 +29,7 @@ module ASIC
     output [4:0]  current_pen,
     output [7:0]  pen_registers,
     output [7:0]  mrer,
+    output [7:0]  rmr2,
 
     // Breakpoint control
     output [31:0] break_point,  // Breakpoint address
@@ -66,7 +67,8 @@ module ASIC
         .rom_select(rom_select),
         .current_pen(current_pen),
         .pen_registers(pen_registers),
-        .mrer(mrer)
+        .mrer(mrer),
+        .rmr2(rmr2)
     );
 
 endmodule
