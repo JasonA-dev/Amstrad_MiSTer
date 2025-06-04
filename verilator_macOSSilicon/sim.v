@@ -584,10 +584,10 @@ mock_sdram sdram (
 
     // Memory interface - handle ROM downloads during reset, CPR during normal operation
     .oe(RESET ? 1'b0 : mem_rd & ~mf2_ram_en),  // Allow reads during cartridge writes
-    .we(RESET ? (ioctl_download & ioctl_wr & rom_download) : (rom_wr | (mem_wr & ~mf2_ram_en & ~mf2_rom_en))),  // ROM writes during reset, cart during normal
-    .addr(RESET ? ioctl_addr[22:0] : (rom_wr ? rom_addr : mf2_rom_en ? { 9'h0ff, cpu_addr[13:0] } : ram_a)),  // Use ioctl addr during reset
-    .bank(2'b00),  // Cartridge data goes to bank 0
-    .din(RESET ? ioctl_dout : (rom_wr ? rom_data : cpu_dout)),  // Use ioctl data during reset
+    .we(RESET ? boot_wr : (rom_wr | (mem_wr & ~mf2_ram_en & ~mf2_rom_en))),  // Use boot_wr during reset
+    .addr(RESET ? boot_a : (rom_wr ? rom_addr : mf2_rom_en ? { 9'h0ff, cpu_addr[13:0] } : ram_a)),  // Use boot_a during reset
+    .bank(RESET ? boot_bank : { 1'b0, model }),  // Use boot_bank during reset, model-based bank otherwise
+    .din(RESET ? boot_dout : (rom_wr ? rom_data : cpu_dout)),  // Use boot_dout during reset
     .dout(ram_dout),
 
     // Video memory access - match sdram.v exactly

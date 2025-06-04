@@ -269,13 +269,50 @@ int main(int argc, char** argv, char** env) {
 	// Setup video
 	if (video.Initialise(windowTitle) == 1) { return 1; }
 
-	// Example downloads
+	// ROM downloads
 	//bus.QueueDownload("./OS6128.rom", 0, true);
-	//bus.QueueDownload("./original.rom", 0, true);
+	bus.QueueDownload("./original.rom", 0, true);
 	//bus.QueueDownload("./diagnostics.rom", 0, true);
-	bus.QueueDownload("./cpr/Barbarian II (1990)(Ocean).cpr", 5, true);
-	//bus.QueueDownload("./cpr/Batman the Movie (1990)(Ocean).cpr", 5, true);
-	//bus.QueueDownload("./cpr/Fire and Forget 2 (1990)(Titus).cpr", 5, true);
+	//bus.QueueDownload("./CPC_PLUS.CPR", 5, true);
+
+	// CPR downloads
+	//bus.QueueDownload("./cpr/Barbarian II (1990)(Ocean).cpr", 5, true);  				// Frame
+	//bus.QueueDownload("./cpr/Batman the Movie (1990)(Ocean).cpr", 5, true);  			// Frame
+	//bus.QueueDownload("./cpr/Batman the Movie (1990)(Ocean)[a].cpr", 5, true);  		// Frame
+	//bus.QueueDownload("./cpr/Burnin' Rubber (1990)(Ocean).cpr", 5, true); 			// NO Frame
+	//bus.QueueDownload("./cpr/Crazy Cars 2 (1990)(Titus).cpr", 5, true);  				// NO Frame, ROM Config 89, RMR2 B8
+	//bus.QueueDownload("./cpr/Crazy Cars 2 (1990)(Titus)[a].cpr", 5, true);  			// NO Frame
+	//bus.QueueDownload("./cpr/Dick Tracy (1990)(Titus).cpr", 5, true);  				// Frame
+	//bus.QueueDownload("./cpr/Enforcer, The (1990)(Trojan).cpr", 5, true);  			// Frame
+	//bus.QueueDownload("./cpr/Fire and Forget 2 (1990)(Titus).cpr", 5, true);  		// Frame
+	//bus.QueueDownload("./cpr/Klax (1990)(Domark).cpr", 5, true);  					// Frame
+	//bus.QueueDownload("./cpr/Klax (1990)(Domark)[a].cpr", 5, true);  					// Frame
+	//bus.QueueDownload("./cpr/Mystical (1990)(Infogrames).cpr", 5, true);  			// NO Frame		
+	//bus.QueueDownload("./cpr/Navy Seals (1990)(Ocean).cpr", 5, true);  				// NO Frame	
+	//bus.QueueDownload("./cpr/Navy Seals (1990)(Ocean)[a].cpr", 5, true);   			// NO Frame	
+	//bus.QueueDownload("./cpr/No Exit (1990)(Tomahawk).cpr", 5, true);   				// NO Frame	
+	//bus.QueueDownload("./cpr/No Exit (1990)(Tomahawk)[a].cpr", 5, true);   			// NO Frame		
+	//bus.QueueDownload("./cpr/Operation Thunderbolt (1990)(Ocean).cpr", 5, true);  	// Frame	 	
+	//bus.QueueDownload("./cpr/Operation Thunderbolt (1990)(Ocean)[a].cpr", 5, true); 	// Frame	
+	//bus.QueueDownload("./cpr/Pang (1990)(Ocean).cpr", 5, true); 						// Frame	
+	//bus.QueueDownload("./cpr/Pang (1990)(Ocean)[a].cpr", 5, true); 					// Frame		
+	//bus.QueueDownload("./cpr/Panza Kick Boxing (1991)(Loriciel).cpr", 5, true); 		// NO Frame	
+	//bus.QueueDownload("./cpr/Plotting (1990)(Ocean).cpr", 5, true); 					// Frame	
+	//bus.QueueDownload("./cpr/Plotting (1990)(Ocean)[a].cpr", 5, true); 				// Frame	
+	//bus.QueueDownload("./cpr/Pro Tennis Tour (1990)(UBI Soft).cpr", 5, true); 		// Frame, ROM Select 82
+	//bus.QueueDownload("./cpr/Pro Tennis Tour (1990)(UBI Soft)[a].cpr", 5, true); 		// Frame, ROM Select 82
+	//bus.QueueDownload("./cpr/Robocop 2 (1990)(Ocean).cpr", 5, true); 					// Frame
+	//bus.QueueDownload("./cpr/Robocop 2 (1990)(Ocean)[a].cpr", 5, true); 				// Frame
+	//bus.QueueDownload("./cpr/Skeet Shoot (1990)(Trojan).cpr", 5, true); 				// Frame, RAM Config c0
+	//bus.QueueDownload("./cpr/Super Pinball Magic (1991)(Loricel).cpr", 5, true); 		// NO Frame
+	//bus.QueueDownload("./cpr/Switchblade (1990)(Gremlin).cpr", 5, true); 				// Frame, ROM Config 89, RAM Config c0
+	//bus.QueueDownload("./cpr/Switchblade (1990)(Gremlin)[a].cpr", 5, true); 			// Frame, ROM Config 89, RAM Config c0
+	//bus.QueueDownload("./cpr/Tennis Cup 2 (1990)(Loriciel).cpr", 5, true); 			// NO Frame
+	//bus.QueueDownload("./cpr/Tin Tin on the Moon (1990)(Infogrames).cpr", 5, true); 	// NO Frame
+	//bus.QueueDownload("./cpr/Wild Streets (1990)(Titus).cpr", 5, true); 				// Frame
+	//bus.QueueDownload("./cpr/Wild Streets (1990)(Titus)[a].cpr", 5, true); 			// Frame
+	//bus.QueueDownload("./cpr/World of Sports (1990)(Epyx).cpr", 5, true); 			// Frame
+	//bus.QueueDownload("./cpr/World of Sports (1990)(Epyx)[a].cpr", 5, true); 			// Frame
 
 #ifdef WIN32
 	MSG msg;

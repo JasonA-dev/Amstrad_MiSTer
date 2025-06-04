@@ -297,6 +297,7 @@ module ASIC_registers
                             end
                         end else begin
                             $display("ASIC: Unhandled port write to 0x7F%02x: value=%02x", cpu_addr[7:0], cpu_data_in);
+                            asic_memory[asic_mem_offset] <= cpu_data_in;
                         end
                     end
                 endcase
