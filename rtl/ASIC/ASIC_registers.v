@@ -62,10 +62,11 @@ module ASIC_registers
     reg [4:0] palette_mem[0:15]; // Palette memory (16 entries)
     reg [7:0] crtc_select_reg;  // CRTC register select
     reg [7:0] crtc_regs[0:31];  // CRTC registers
-    reg [7:0] acid_seq[0:15];   // ACID unlock sequence
+    reg [7:0] acid_seq[0:16];   // ACID unlock sequence
     reg [4:0] acid_pos;         // ACID unlock position
     reg       acid_unlock_reg;  // ACID unlocked flag
     reg [7:0] crtc_select_prev; // Previous CRTC select value for change detection
+    reg [7:0] crtc_addr_prev;   // Previous CRTC address for change detection
     reg [7:0] rom_config_prev;  // Previous ROM config value for change detection
     reg [7:0] rom_sel_prev;     // Previous ROM select value for change detection
     reg [7:0] rmr2_prev;        // Previous RMR2 value for change detection
@@ -122,6 +123,9 @@ module ASIC_registers
         end
     endfunction
 
+
+    reg acid_state;  // Current ACID state
+
     // Address decode
     wire reg_wr = cpu_wr && (cpu_addr[15:8] == 8'h7F);
     wire reg_rd = cpu_rd && (cpu_addr[15:8] == 8'h7F);
@@ -129,7 +133,7 @@ module ASIC_registers
     wire ppi_wr = cpu_wr && (cpu_addr[15:8] == 8'hF7);
     wire ppi_rd = cpu_rd && (cpu_addr[15:8] == 8'hF7);
     wire plus_wr = cpu_wr && (cpu_addr == 16'hEF7F);  // Plus control register
-    wire crtc_select_wr = cpu_wr && (cpu_addr[15:8] == 8'hBC) && (cpu_addr[7:0] == 8'h00);  // CRTC register select
+    wire crtc_select_wr = cpu_wr && (cpu_addr[15:8] == 8'hBC);  // CRTC register select - any BCxx address
     wire crtc_data_wr = cpu_wr && (cpu_addr[15:8] == 8'hBD) && (cpu_addr[7:0] == 8'h00);    // CRTC register data
     wire fdc_wr = cpu_wr && (cpu_addr[15:8] == 8'hFA);  // FDC control
     wire f600_wr = cpu_wr && (cpu_addr == 16'hF600);  // Add F600 port write
@@ -154,6 +158,55 @@ module ASIC_registers
     localparam DMA_REPEAT_N         = 1;   // Bit 1: Repeat N instruction
     localparam DMA_PAUSE           = 0;    // Bit 0: Pause instruction
 
+
+    // Unlock sequence (17 bytes)
+    localparam [7:0] UNLOCK_SEQ [0:16] = '{
+        8'hFF,  // First byte
+        8'h77,  // Second byte
+        8'hB3,  // Third byte
+        8'h51,  // Fourth byte
+        8'hA8,  // Fifth byte
+        8'hD4,  // Sixth byte
+        8'h62,  // Seventh byte
+        8'h39,  // Eighth byte
+        8'h9C,  // Ninth byte
+        8'h46,  // Tenth byte
+        8'h2B,  // Eleventh byte
+        8'h15,  // Twelfth byte
+        8'h8A,  // Thirteenth byte
+        8'hCD,  // Fourteenth byte (STATE)
+        8'hEE,  // Fifteenth byte
+        8'hFF,  // Sixteenth byte
+        8'hFF   // Final byte
+    };
+
+    // State machine states
+    typedef enum logic [1:0] {
+        LOCKED,     // ASIC is locked
+        UNLOCKING,  // In process of unlocking
+        UNLOCKED,   // ASIC is unlocked
+        PERM_UNLOCKED // Permanently unlocked - no more attempts needed
+    } acid_state_t;
+
+    // Registers
+    acid_state_t state;
+    logic [4:0]  seq_index;    // Current position in unlock sequence
+    logic [7:0]  status_reg;   // Status register
+    logic [31:0] attempt_count; // Debug counter for unlock attempts
+    logic [7:0]  received_seq [0:16]; // Store received sequence for debugging
+    logic [7:0]  next_byte;    // Next byte to be read by CPU
+    reg [7:0] unlock_addr = 8'h00;
+
+    // Debug signals
+    logic last_cpu_wr;
+    logic last_cpu_rd;
+    logic [7:0] last_cpu_data_in;
+    logic [15:0] last_cpu_addr;
+
+    // Read logic - using continuous assignment instead of procedural
+    reg [7:0] asic_register;
+    reg [7:0] register_index;
+
     // Handle register writes
     always @(posedge clk_sys) begin
         if (reset) begin
@@ -170,23 +223,8 @@ module ASIC_registers
             for (int i = 0; i < 32; i++) crtc_regs[i] <= 8'h00;
             acid_pos <= 5'h00;
             acid_unlock_reg <= 1'b0;
-            // Initialize ACID sequence
-            acid_seq[0] <= 8'haa;
-            acid_seq[1] <= 8'h00;
-            acid_seq[2] <= 8'hff;
-            acid_seq[3] <= 8'h77;
-            acid_seq[4] <= 8'hb3;
-            acid_seq[5] <= 8'h51;
-            acid_seq[6] <= 8'ha8;
-            acid_seq[7] <= 8'hd4;
-            acid_seq[8] <= 8'h62;
-            acid_seq[9] <= 8'h39;
-            acid_seq[10] <= 8'h9c;
-            acid_seq[11] <= 8'h46;
-            acid_seq[12] <= 8'h2b;
-            acid_seq[13] <= 8'h15;
-            acid_seq[14] <= 8'h8a;
-            acid_seq[15] <= 8'hcd;
+            acid_state <= LOCKED;
+
             // Initialize other registers
             ppi_port_a <= 8'h00;
             ppi_port_b <= 8'h00;
@@ -201,39 +239,77 @@ module ASIC_registers
             unused_mem_addr_prev <= 14'h0000;
             for (int i = 0; i < 16; i++) pen_ink_ports_prev[i] <= 8'h00;
             pen_ink_state_prev <= 5'h00;
+
+            state <= LOCKED;
+            seq_index <= '0;
+            status_reg <= UNLOCK_SEQ[0];
+            next_byte <= UNLOCK_SEQ[0];
+            attempt_count <= '0;
+            for (int i = 0; i < 17; i++) received_seq[i] <= 8'h00;
+            last_cpu_wr <= 1'b0;
+            last_cpu_rd <= 1'b0;
+            last_cpu_data_in <= 8'h00;
+            last_cpu_addr <= 16'h0000;
+
         end else begin
-            // CRTC register handling
-            if (crtc_select_wr) begin
-                crtc_select_reg <= cpu_data_in;
-                //$display("ASIC: OUT on port bc%02x, val=%02x", cpu_data_in, cpu_data_in);
 
-                // Check for ACID unlock sequence only if value changed
-                if (!acid_unlock_reg && cpu_data_in != crtc_select_prev) begin
-                    if (cpu_data_in == acid_seq[acid_pos]) begin
-                        acid_pos <= acid_pos + 1'd1;
-                        if (acid_pos == 4'd15) begin
-                            acid_unlock_reg <= 1'b1;
-                            $display("ASIC: ACID unlocked!");
+            // Store last CPU signals for edge detection
+            last_cpu_wr <= cpu_wr;
+            last_cpu_rd <= cpu_rd;
+            last_cpu_data_in <= cpu_data_in;
+            last_cpu_addr <= cpu_addr;
+
+            // Handle reads from BC00-BCFF - detect active read
+            if (cpu_wr && !last_cpu_wr && cpu_addr[15:8] == 8'hBC) begin
+                //$display("ACID read");
+                case (state)
+                    LOCKED: begin
+                        $display("ACID locked");
+                        // First read starts unlock sequence
+                        state <= UNLOCKING;
+                        seq_index <= 5'd0;
+                        status_reg <= UNLOCK_SEQ[0];
+                        next_byte <= UNLOCK_SEQ[0];
+                        attempt_count <= attempt_count + 1'd1;
+                    end
+
+                    UNLOCKING: begin
+                        $display("ACID unlocking");
+                        // Check if correct byte was read
+                        if (next_byte == UNLOCK_SEQ[seq_index]) begin
+                            received_seq[seq_index] <= next_byte;
+                            if (seq_index == 14) begin
+                                // STATE byte received - unlock ASIC
+                                $display("ACID unlocked");
+                                state <= PERM_UNLOCKED;  // Change to PERM_UNLOCKED
+                                seq_index <= seq_index + 1'd1;
+                                status_reg <= UNLOCK_SEQ[16];
+                                next_byte <= UNLOCK_SEQ[16];
+                                acid_unlock_reg <= 1'b1;
+                            end
+                            else begin
+                                seq_index <= seq_index + 1'd1;
+                                status_reg <= UNLOCK_SEQ[seq_index + 1'd1];
+                                next_byte <= UNLOCK_SEQ[seq_index + 1'd1];
+                            end
                         end
-                    end else begin
-                        acid_pos <= 0;
+                        else begin
+                            // Wrong byte read - reset sequence
+                            state <= LOCKED;
+                            seq_index <= '0;
+                            status_reg <= UNLOCK_SEQ[0];
+                            next_byte <= UNLOCK_SEQ[0];
+                        end
                     end
-                end
-                crtc_select_prev <= cpu_data_in;
+
+                    PERM_UNLOCKED: begin
+                        // Stay in PERM_UNLOCKED state, no more unlock attempts needed
+                    end
+
+                    default: state <= LOCKED;
+                endcase
             end
 
-            if (crtc_data_wr) begin
-                // Only write to CRTC register if ACID is unlocked or it's a standard CRTC register (0-15)
-                if (acid_unlock_reg || crtc_select_reg < 16) begin
-                    if (cpu_data_in != crtc_data_prev) begin
-                        crtc_regs[crtc_select_reg] <= cpu_data_in;
-                        //$display("ASIC: CRTC write to register %d: %d", crtc_select_reg, cpu_data_in);
-                        crtc_data_prev <= cpu_data_in;
-                    end
-                end else begin
-                    //$display("ASIC: Ignoring CRTC write to register %d (ACID locked)", crtc_select_reg);
-                end
-            end
 
             // I/O space register writes
             if (reg_wr) begin

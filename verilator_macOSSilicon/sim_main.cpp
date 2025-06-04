@@ -276,16 +276,16 @@ int main(int argc, char** argv, char** env) {
 	//bus.QueueDownload("./CPC_PLUS.CPR", 5, true);
 
 	// CPR downloads
-	//bus.QueueDownload("./cpr/Barbarian II (1990)(Ocean).cpr", 5, true);  				// Frame
-	//bus.QueueDownload("./cpr/Batman the Movie (1990)(Ocean).cpr", 5, true);  			// Frame
-	//bus.QueueDownload("./cpr/Batman the Movie (1990)(Ocean)[a].cpr", 5, true);  		// Frame
+	bus.QueueDownload("./cpr/Barbarian II (1990)(Ocean).cpr", 5, true);  				// Frame, ACID unlocked
+	//bus.QueueDownload("./cpr/Batman the Movie (1990)(Ocean).cpr", 5, true);  			// Frame, ACID unlocked
+	//bus.QueueDownload("./cpr/Batman the Movie (1990)(Ocean)[a].cpr", 5, true);  		// Frame, ACID unlocked
 	//bus.QueueDownload("./cpr/Burnin' Rubber (1990)(Ocean).cpr", 5, true); 			// NO Frame
-	bus.QueueDownload("./cpr/Crazy Cars 2 (1990)(Titus).cpr", 5, true);  				// NO Frame, ROM Config 89, RMR2 B8
-	//bus.QueueDownload("./cpr/Crazy Cars 2 (1990)(Titus)[a].cpr", 5, true);  			// NO Frame
-	//bus.QueueDownload("./cpr/Dick Tracy (1990)(Titus).cpr", 5, true);  				// Frame
-	//bus.QueueDownload("./cpr/Enforcer, The (1990)(Trojan).cpr", 5, true);  			// Frame
-	//bus.QueueDownload("./cpr/Fire and Forget 2 (1990)(Titus).cpr", 5, true);  		// Frame
-	//bus.QueueDownload("./cpr/Klax (1990)(Domark).cpr", 5, true);  					// Frame
+	//bus.QueueDownload("./cpr/Crazy Cars 2 (1990)(Titus).cpr", 5, true);  				// NO Frame, ROM Config 89, RMR2 B8, ACID unlocked
+	//bus.QueueDownload("./cpr/Crazy Cars 2 (1990)(Titus)[a].cpr", 5, true);  			// NO Frame, ACID unlocked
+	//bus.QueueDownload("./cpr/Dick Tracy (1990)(Titus).cpr", 5, true);  				// Frame, ACID unlocked
+	//bus.QueueDownload("./cpr/Enforcer, The (1990)(Trojan).cpr", 5, true);  			// Frame, ACID unlocked
+	//bus.QueueDownload("./cpr/Fire and Forget 2 (1990)(Titus).cpr", 5, true);  		// Frame, ACID unlocked
+	//bus.QueueDownload("./cpr/Klax (1990)(Domark).cpr", 5, true);  					// Frame, ACID unlocked
 	//bus.QueueDownload("./cpr/Klax (1990)(Domark)[a].cpr", 5, true);  					// Frame
 	//bus.QueueDownload("./cpr/Mystical (1990)(Infogrames).cpr", 5, true);  			// NO Frame		
 	//bus.QueueDownload("./cpr/Navy Seals (1990)(Ocean).cpr", 5, true);  				// NO Frame	
@@ -449,8 +449,8 @@ int main(int argc, char** argv, char** env) {
 		ImGui::Separator(); 
 		ImGui::Text("ASIC Palette ptr:     0x%01X", top->top__DOT__asic__DOT__asic_regs__DOT__palette_ptr);  
 		ImGui::Separator();
-		ImGui::Text("ACID POS:        0x%01X", top->top__DOT__asic__DOT__asic_regs__DOT__acid_pos); 
-		ImGui::Text("ACID UNLOCK:     0x%01X", top->top__DOT__asic__DOT__asic_regs__DOT__acid_unlock_reg); 
+		//ImGui::Text("ACID POS:        0x%01X", top->top__DOT__asic__DOT__asic_regs__DOT__acid_pos); 
+		ImGui::Text("ACID UNLOCKED:   0x%01X", top->top__DOT__asic__DOT__asic_regs__DOT__acid_unlocked); 
 		ImGui::End();
 
 		ImGui::Begin("Gate Array");
