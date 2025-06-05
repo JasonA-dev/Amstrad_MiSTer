@@ -87,8 +87,7 @@ module Amstrad_motherboard
 	input  [7:0] rom_select,
 	input  [7:0] ppi_control,
 	input  [7:0] pen_registers,
-	input  [4:0] current_pen,
-	input  [7:0] rmr2
+	input  [4:0] current_pen
 );
 
 wire crtc_shift;
@@ -256,6 +255,20 @@ crt_filter crt_filter
 	.SHIFT(crtc_shift)
 );
 
+//wire [7:0] mrer;
+reg  [7:0] mrer_reg;
+
+// MRER register handling
+always @(posedge clk) begin
+	if (reset) begin
+		mrer_reg <= 8'h00;
+	end else if (io_wr && A[15:8] == 8'h7F && D[7:5] == 3'b100 && plus_mode) begin
+		mrer_reg <= D;
+	end
+end
+
+//assign mrer = mrer_reg;
+
 ga40010 GateArray (
 	.clk(clk),
 	.cen_16(ce_16),
@@ -270,9 +283,8 @@ ga40010 GateArray (
 	.HSYNC_I(crtc_hs),
 	.VSYNC_I(crtc_vs),
 	.DISPEN(crtc_de),
-
-	.mrer(mrer),
-	.rmr2(rmr2),
+	.plus_mode(plus_mode),
+	//.mrer(mrer),
 
 	.CCLK(),
 	.CCLK_EN_P(cclk_en_p),
@@ -310,16 +322,11 @@ Amstrad_MMU MMU
 	.ram64k(ram64k),
 	.romen_n(romen_n),
 	.rom_map(rom_map),
-	.plus_mode(plus_mode),
-	.A(A),
-	.D(D),
 	.io_WR(io_wr),
-	.ram_A(mem_addr),
-	
-	// Connect register outputs directly
-	.ram_config(ram_config_in),
-	.mrer(mrer_in),
-	.rom_select(rom_select_in)
+	.plus_mode(plus_mode),
+	.D(D),
+	.A(A),
+	.ram_A(mem_addr)
 );
 
 wire [7:0] ppi_dout;

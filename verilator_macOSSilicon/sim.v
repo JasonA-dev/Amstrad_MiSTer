@@ -187,8 +187,8 @@ always @(posedge clk_48) begin
 					
 			if(ioctl_index) begin
 				if (plus_download) begin
-					// Plus ROM is loaded into dedicated area in the second half of memory
-					boot_a[22]    <= 1'b1;   // Use second half of memory
+					// Plus ROM is loaded into first half of memory to match MAME behavior
+					boot_a[22]    <= 1'b0;   // Use first half of memory
 					boot_a[21:14] <= ioctl_addr[21:14];  // Use file address directly
 					boot_bank     <= 1'b0;   // Always use bank 0 for Plus ROMs
 				end else begin
@@ -554,8 +554,8 @@ Amstrad_motherboard motherboard
     .mrer(mrer),
     .rom_select(rom_select),
     .pen_registers(pen_registers),
-    .current_pen(current_pen),
-    .rmr2(rmr2)
+    .current_pen(current_pen)
+    //.rmr2(rmr2)
 );
 
 // Video output conversion - expanding 2-bit color to 6-bit

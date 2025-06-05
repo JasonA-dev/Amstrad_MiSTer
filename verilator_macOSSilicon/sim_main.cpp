@@ -281,7 +281,7 @@ int main(int argc, char** argv, char** env) {
 	//bus.QueueDownload("./cpr/Batman the Movie (1990)(Ocean)[a].cpr", 5, true);  		// Frame, ACID unlocked
 	//bus.QueueDownload("./cpr/Burnin' Rubber (1990)(Ocean).cpr", 5, true); 			// NO Frame
 	//bus.QueueDownload("./cpr/Crazy Cars 2 (1990)(Titus).cpr", 5, true);  				// NO Frame, ROM Config 89, RMR2 B8, ACID unlocked
-	//bus.QueueDownload("./cpr/Crazy Cars 2 (1990)(Titus)[a].cpr", 5, true);  			// NO Frame, ACID unlocked
+	//bus.QueueDownload("./cpr/Crazy Cars 2 (1990)(Titus)[a].cpr", 5, true);  			// Frame, ACID unlocked
 	//bus.QueueDownload("./cpr/Dick Tracy (1990)(Titus).cpr", 5, true);  				// Frame, ACID unlocked
 	//bus.QueueDownload("./cpr/Enforcer, The (1990)(Trojan).cpr", 5, true);  			// Frame, ACID unlocked
 	//bus.QueueDownload("./cpr/Fire and Forget 2 (1990)(Titus).cpr", 5, true);  		// Frame, ACID unlocked
@@ -291,7 +291,7 @@ int main(int argc, char** argv, char** env) {
 	//bus.QueueDownload("./cpr/Navy Seals (1990)(Ocean).cpr", 5, true);  				// NO Frame	
 	//bus.QueueDownload("./cpr/Navy Seals (1990)(Ocean)[a].cpr", 5, true);   			// NO Frame	
 	//bus.QueueDownload("./cpr/No Exit (1990)(Tomahawk).cpr", 5, true);   				// NO Frame	
-	//bus.QueueDownload("./cpr/No Exit (1990)(Tomahawk)[a].cpr", 5, true);   			// NO Frame		
+	//bus.QueueDownload("./cpr/No Exit (1990)(Tomahawk)[a].cpr", 5, true);   			// NO Frame, RMR2 B8		
 	//bus.QueueDownload("./cpr/Operation Thunderbolt (1990)(Ocean).cpr", 5, true);  	// Frame	 	
 	//bus.QueueDownload("./cpr/Operation Thunderbolt (1990)(Ocean)[a].cpr", 5, true); 	// Frame	
 	//bus.QueueDownload("./cpr/Pang (1990)(Ocean).cpr", 5, true); 						// Frame	
@@ -307,7 +307,7 @@ int main(int argc, char** argv, char** env) {
 	//bus.QueueDownload("./cpr/Super Pinball Magic (1991)(Loricel).cpr", 5, true); 		// NO Frame
 	//bus.QueueDownload("./cpr/Switchblade (1990)(Gremlin).cpr", 5, true); 				// Frame, ROM Config 89, RAM Config c0
 	//bus.QueueDownload("./cpr/Switchblade (1990)(Gremlin)[a].cpr", 5, true); 			// Frame, ROM Config 89, RAM Config c0
-	//bus.QueueDownload("./cpr/Tennis Cup 2 (1990)(Loriciel).cpr", 5, true); 			// NO Frame
+	//bus.QueueDownload("./cpr/Tennis Cup 2 (1990)(Loriciel).cpr", 5, true); 			// Frame, ACID unlocked
 	//bus.QueueDownload("./cpr/Tin Tin on the Moon (1990)(Infogrames).cpr", 5, true); 	// NO Frame
 	//bus.QueueDownload("./cpr/Wild Streets (1990)(Titus).cpr", 5, true); 				// Frame
 	//bus.QueueDownload("./cpr/Wild Streets (1990)(Titus)[a].cpr", 5, true); 			// Frame
@@ -457,8 +457,8 @@ int main(int argc, char** argv, char** env) {
 		ImGui::SetWindowPos("Gate Array", ImVec2(0, 570), ImGuiCond_Once);
 		ImGui::SetWindowSize("Gate Array", ImVec2(500, 200), ImGuiCond_Once);
 		ImGui::Text("Gate Array Registers:"); 
-		ImGui::Text("MRER:       0x%01X", top->top__DOT__motherboard__DOT__GateArray__DOT__mrer);  
-		ImGui::Text("RMR2:       0x%01X", top->top__DOT__motherboard__DOT__GateArray__DOT__rmr2);  
+		//ImGui::Text("MRER:       0x%01X", top->top__DOT__motherboard__DOT__GateArray__DOT__mrer);  
+		//ImGui::Text("RMR2:       0x%01X", top->top__DOT__motherboard__DOT__GateArray__DOT__rmr2);  
 
 		ImGui::End();
 		

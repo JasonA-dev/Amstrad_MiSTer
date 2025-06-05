@@ -39,9 +39,8 @@ module ga40010 (
 	input  HSYNC_I,
 	input  VSYNC_I,
 	input  DISPEN,
-
-    input reg [7:0] mrer,
-	input reg [7:0] rmr2,
+	input  plus_mode,
+	input  [7:0] mrer,  // Add MRER input
 
 	output CCLK,
 	output CCLK_EN_P,
@@ -175,11 +174,9 @@ reg  [4:0] inkr[16];
 wire       irq_reset;
 reg        hromen;
 reg        lromen;
-reg        mode1_int;
-reg        mode0_int;
-
-reg 	   RMR2;
-assign     RMR2 = rmr2;
+reg        mode1;
+reg        mode0;
+reg        int_en;  // Add interrupt enable register
 
 wire       reg_latch = (S[0] & S[7]) | (fast & ~E244_N);
 wire       reg_sel   = reg_latch & ~IORQ_N & ~A[15] & A[14] & M1_N;
@@ -193,23 +190,28 @@ assign     irq_reset = ctrl_en & D[4];
 always @(posedge clk) begin
 	if (ink_en) inksel <= D[4:0];
 	if (reset) border <= 5'b10000; else if (border_en) border <= D[4:0];
-	if (reset) {hromen, lromen, mode1_int, mode0_int} <= 0;
-	else if (ctrl_en) {hromen, lromen, mode1_int, mode0_int} <= D[3:0];
+	if (reset) {hromen, lromen, mode1, mode0, int_en} <= 0;
+	else if (ctrl_en) begin
+		if (plus_mode && mrer[5]) begin
+			// Plus mode with MRER enabled
+			hromen <= ~mrer[1];  // Upper ROM enable (inverted)
+			lromen <= ~mrer[0];  // Lower ROM enable (inverted)
+			mode1 <= mrer[3];    // Video mode bit 1
+			mode0 <= mrer[2];    // Video mode bit 0
+		end else begin
+			// Standard mode or Plus mode without MRER
+			{hromen, lromen, mode1, mode0} <= D[3:0];
+		end
+		int_en <= ~D[4];  // Invert bit 4 for active-high interrupt enable
+	end
 	if (inkr_en) inkr[inksel[3:0]] <= D[4:0];
 end
 
-// Use MRER for Plus models if set, else use internal logic
-wire use_mrer = 1'b0; //(mrer !== 8'b0);
-wire mode1 = use_mrer ? mrer[1] : mode1_int;
-wire mode0 = use_mrer ? mrer[0] : mode0_int;
 assign MODE = {mode1, mode0};
 
-// ROM enables: use MRER if set, else existing logic
-wire lower_rom_enabled = use_mrer ? ~mrer[2] : ~lromen; // 0 = enabled
-wire upper_rom_enabled = use_mrer ? ~mrer[3] : ~hromen; // 0 = enabled
+/////// ROM/RAM MAPPING /////////
 
-wire rom = ((~A[15] & ~A[14] & lower_rom_enabled) |
-            (A[15] & A[14] & upper_rom_enabled));
+wire rom = (~lromen & ~A[15] & ~A[14]) | (~hromen & A[15] & A[14]);
 assign ROM = rom;
 assign ROMEN_N = ~rom | MREQ_N | RD_N;
 assign RAMRD_N =  rom | MREQ_N | RD_N;
@@ -283,5 +285,11 @@ video video_sync(
 	.RED_OE_N(RED_OE_N),
 	.RED(RED)
 );
+
+// Update INT_N generation to use int_en
+always @(posedge clk) begin
+	if (reset || irq_reset) INT_N <= 1;
+	else if (int_en && HSYNC_I && VSYNC_I) INT_N <= 0;
+end
 
 endmodule
