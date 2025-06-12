@@ -39,9 +39,9 @@ module ga40010 (
 	input  HSYNC_I,
 	input  VSYNC_I,
 	input  DISPEN,
-	input  plus_mode,
-	input  [7:0] mrer,  // Add MRER input
 
+    input  block_ctrl_en,
+	
 	output CCLK,
 	output CCLK_EN_P,
 	output CCLK_EN_N,
@@ -66,6 +66,8 @@ module ga40010 (
 	output SYNC_N,
 	output reg INT_N,
 	output VBLANK,
+
+	output PEN_ID,
 
 	output BLUE_OE_N,  // BLUE   50%
 	output BLUE,       // BLUE  100%
@@ -176,13 +178,15 @@ reg        hromen;
 reg        lromen;
 reg        mode1;
 reg        mode0;
-reg        int_en;  // Add interrupt enable register
 
-wire       reg_latch = (S[0] & S[7]) | (fast & ~E244_N);
-wire       reg_sel   = reg_latch & ~IORQ_N & ~A[15] & A[14] & M1_N;
-wire       ink_en    = reg_sel & ~D[7] & ~D[6];
-wire       border_en = reg_sel & ~D[7] &  D[6] &  inksel[4];
-wire       ctrl_en   = reg_sel &  D[7] & ~D[6];
+wire       reg_latch   = (S[0] & S[7]) | (fast & ~E244_N);
+wire       reg_sel     = reg_latch & ~IORQ_N & ~A[15] & A[14] & M1_N;
+wire       ink_en      = reg_sel & ~D[7] & ~D[6];
+wire       border_en   = reg_sel & ~D[7] &  D[6] &  inksel[4];
+
+wire       ctrl_en_raw = reg_sel &  D[7] & ~D[6];
+wire       ctrl_en     = ctrl_en_raw & ~block_ctrl_en;   // new
+
 wire       inkr_en   = reg_sel & ~D[7] &  D[6] & ~inksel[4];
 
 assign     irq_reset = ctrl_en & D[4];
@@ -190,20 +194,8 @@ assign     irq_reset = ctrl_en & D[4];
 always @(posedge clk) begin
 	if (ink_en) inksel <= D[4:0];
 	if (reset) border <= 5'b10000; else if (border_en) border <= D[4:0];
-	if (reset) {hromen, lromen, mode1, mode0, int_en} <= 0;
-	else if (ctrl_en) begin
-		if (plus_mode && mrer[5]) begin
-			// Plus mode with MRER enabled
-			hromen <= ~mrer[1];  // Upper ROM enable (inverted)
-			lromen <= ~mrer[0];  // Lower ROM enable (inverted)
-			mode1 <= mrer[3];    // Video mode bit 1
-			mode0 <= mrer[2];    // Video mode bit 0
-		end else begin
-			// Standard mode or Plus mode without MRER
-			{hromen, lromen, mode1, mode0} <= D[3:0];
-		end
-		int_en <= ~D[4];  // Invert bit 4 for active-high interrupt enable
-	end
+	if (reset) {hromen, lromen, mode1, mode0} <= 0;
+	else if (ctrl_en) {hromen, lromen, mode1, mode0} <= D[3:0];
 	if (inkr_en) inkr[inksel[3:0]] <= D[4:0];
 end
 
@@ -239,6 +231,8 @@ always @(posedge clk) begin
 end
 
 //////// VIDEO CONTROL ////////
+wire pen_id;
+assign PEN_ID = pen_id;
 
 `ifdef VERILATOR
 video video(
@@ -254,6 +248,9 @@ video video(
 	.BORDER(border),
 	.INKR(inkr),
 	.FORCE_BLANK(HCNTLT28 | HSYNC_I),
+
+	.PEN_ID(pen_id), // NEW: current ink number on this pixel
+
 	.BLUE_OE_N(),
 	.BLUE(),
 	.GREEN_OE_N(),
@@ -278,6 +275,9 @@ video video_sync(
 	.BORDER(border),
 	.INKR(inkr),
 	.FORCE_BLANK(HCNTLT28 | HSYNC_I),
+
+	.PEN_ID(pen_id), // NEW: current ink number on this pixel
+
 	.BLUE_OE_N(BLUE_OE_N),
 	.BLUE(BLUE),
 	.GREEN_OE_N(GREEN_OE_N),
@@ -285,11 +285,5 @@ video video_sync(
 	.RED_OE_N(RED_OE_N),
 	.RED(RED)
 );
-
-// Update INT_N generation to use int_en
-always @(posedge clk) begin
-	if (reset || irq_reset) INT_N <= 1;
-	else if (int_en && HSYNC_I && VSYNC_I) INT_N <= 0;
-end
 
 endmodule

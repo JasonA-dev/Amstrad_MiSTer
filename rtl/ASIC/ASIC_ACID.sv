@@ -125,10 +125,10 @@ module ASIC_ACID
 
             // Handle reads from BC00-BCFF - detect active read
             if (cpu_rd && !last_cpu_rd && cpu_addr[15:8] == 8'hBC) begin
-                $display("ACID read");
+                $display("@%0t ACID read", $time);
                 case (state)
                     LOCKED: begin
-                        $display("ACID locked");
+                        $display("@%0t ACID locked", $time);
                         // First read starts unlock sequence
                         state <= UNLOCKING;
                         seq_index <= 5'd0;
@@ -138,13 +138,13 @@ module ASIC_ACID
                     end
 
                     UNLOCKING: begin
-                        $display("ACID unlocking");
+                        $display("@%0t ACID unlocking", $time);
                         // Check if correct byte was read
                         if (next_byte == UNLOCK_SEQ[seq_index]) begin
                             received_seq[seq_index] <= next_byte;
                             if (seq_index == 15) begin
                                 // STATE byte received - unlock ASIC
-                                $display("ACID unlocked");
+                                $display("@%0t ACID unlocked", $time);
                                 state <= PERM_UNLOCKED;  // Change to PERM_UNLOCKED
                                 seq_index <= seq_index + 1'd1;
                                 status_reg <= UNLOCK_SEQ[16];

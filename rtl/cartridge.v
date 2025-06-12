@@ -2,8 +2,7 @@ module cartridge
 (
     input         clk_sys,
     input         reset,
-    input         plus_mode,      
-    
+      
     // ROM loading interface
     input         ioctl_wr,
     input  [24:0] ioctl_addr,

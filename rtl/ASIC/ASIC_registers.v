@@ -264,7 +264,7 @@ module ASIC_registers
                 //$display("ACID read");
                 case (state)
                     LOCKED: begin
-                        $display("ACID locked");
+                        $display("@%0t ACID locked", $time);
                         // First read starts unlock sequence
                         state <= UNLOCKING;
                         seq_index <= 5'd0;
@@ -274,13 +274,13 @@ module ASIC_registers
                     end
 
                     UNLOCKING: begin
-                        $display("ACID unlocking");
+                        $display("@%0t ACID unlocking", $time);
                         // Check if correct byte was read
                         if (next_byte == UNLOCK_SEQ[seq_index]) begin
                             received_seq[seq_index] <= next_byte;
                             if (seq_index == 14) begin
                                 // STATE byte received - unlock ASIC
-                                $display("ACID unlocked");
+                                $display("@%0t ACID unlocked", $time);
                                 state <= PERM_UNLOCKED;  // Change to PERM_UNLOCKED
                                 seq_index <= seq_index + 1'd1;
                                 status_reg <= UNLOCK_SEQ[16];
@@ -310,8 +310,7 @@ module ASIC_registers
                 endcase
             end
 
-
-            // I/O space register writes
+            /*// I/O space register writes
             if (reg_wr) begin
                 case (cpu_addr[7:0])
                     8'hB8: begin
@@ -379,7 +378,9 @@ module ASIC_registers
                     end
                 endcase
             end
-            
+            */
+
+            /*
             if (rom_wr && cpu_addr[7:0] == 8'h00) begin
                 if (cpu_data_in != rom_sel_prev) begin
                     rom_sel_reg <= cpu_data_in;
@@ -387,7 +388,9 @@ module ASIC_registers
                     rom_sel_prev <= cpu_data_in;
                 end
             end
+            */
 
+            /*
             // ASIC memory write (4000h-7FFFh)
             if (asic_mem_wr) begin
                 // Write only to writable registers/areas
@@ -517,9 +520,11 @@ module ASIC_registers
                     end
                 end
             end
+            */
         end
     end
 
+    
     // Handle register reads
     always @(posedge clk_sys) begin
         cpu_data_out = 8'hFF;
@@ -528,6 +533,7 @@ module ASIC_registers
         asic_data_out_en = 0;
 
         if (asic_mem_rd) begin
+            /*
             if (asic_mem_offset < 14'h1000) begin
                 // Sprite image data (4000h-4FFFh) - mask with 0x0F
                 cpu_data_out = asic_memory[asic_mem_offset] & 8'h0F;
@@ -596,7 +602,9 @@ module ASIC_registers
                 end
                 cpu_data_out_en = 1;
             end
+            */
         end
+        /*
         else if (reg_rd) begin
             case (cpu_addr[7:0])
                 8'h00: begin cpu_data_out = ppi_port_a; cpu_data_out_en = 1; end
@@ -610,6 +618,7 @@ module ASIC_registers
                 end
             endcase
         end
+        */
         else if (crtc_select_wr) begin
             asic_data_out = crtc_select_reg;
             asic_data_out_en = 1;
@@ -619,8 +628,9 @@ module ASIC_registers
             asic_data_out_en = 1;
         end
     end
+    
 
-    // Output assignments
+    /*
     always @(posedge clk_sys) begin
         ram_config <= ram_map_reg;
         rom_config <= mrer_reg;
@@ -633,5 +643,6 @@ module ASIC_registers
         acid_unlocked <= acid_unlock_reg;
         rmr2 <= rmr2_reg;
     end
+    */
 
 endmodule 

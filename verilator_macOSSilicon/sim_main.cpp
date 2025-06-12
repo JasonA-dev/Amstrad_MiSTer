@@ -89,7 +89,7 @@ double sc_time_stamp() {
     return main_time;
 }
 
-int  clk_sys_freq = 64000000;
+int  clk_sys_freq = 48000000;
 SimClock clk_48(1); 
 //SimClock clk_24(2); 
 
@@ -130,6 +130,13 @@ void resetSim() {
 	main_time = 0;
 	clk_48.Reset();
 	//clk_24.Reset();
+}
+
+// ------------   correct 6-bit-to-8-bit expansion + channel order   -----------
+inline uint8_t expand6(uint8_t v6)
+/* 6-bit (0‥63) → 8-bit (0‥255) by bit-replication: bbbbbb → bbbbbb bb */
+{
+    return (v6 << 2) | (v6 >> 4);
 }
 
 //-----------------------------------------------------------------------
@@ -177,17 +184,22 @@ int verilate() {
 			audio.Clock(top->AUDIO_L, top->AUDIO_R);
 #endif
 
+
 			// If the design has a "pixel" enable at rising edge
 			if (top->top__DOT__ce_pix) {
 				uint32_t colour = 0xFF000000;
 				
+				uint8_t r_val = top->VGA_R;   // 6-bit → 8-bit
+    			uint8_t g_val = top->VGA_G;
+    			uint8_t b_val = top->VGA_B;
+
 				// Scale up the 2-bit color to 8-bit for better visibility
-				uint8_t r_val = top->VGA_R * 0x55;  // Scale 0-3 to 0-255
-				uint8_t g_val = top->VGA_G * 0x55;
-				uint8_t b_val = top->VGA_B * 0x55;
-				
+				//uint8_t r_val = top->VGA_R * 0x55; // Scale 0-3 to 0-255
+				//uint8_t g_val = top->VGA_G * 0x55;
+				//uint8_t b_val = top->VGA_B * 0x55;
+
 				colour = 0xFF000000 | (b_val << 16) | (g_val << 8) | r_val;
-				
+
 				video.Clock(top->VGA_HB, top->VGA_VB,
 				            top->VGA_HS, top->VGA_VS, colour);
 			}
@@ -398,6 +410,17 @@ int main(int argc, char** argv, char** env) {
 				mem_edit.DrawContents(&top->top__DOT__asic__DOT__asic_regs__DOT__palette_mem[0], 16, 0); // 16
 				ImGui::EndTabItem();
 			}
+			/*
+			if (ImGui::BeginTabItem("Plus Palette")) {
+    		// 17 entries × 2 bytes → 34 bytes, stride 2 so each word starts a new column
+    			mem_edit.DrawContents(
+        			reinterpret_cast<uint8_t*>(
+            		&top->top__DOT__motherboard__DOT__plus_ctrl__DOT__palette[0]),
+        			17 * 2,          // 34 bytes
+        			2);              // byte-stride
+    			ImGui::EndTabItem();
+			}
+			*/
 			ImGui::EndTabBar();
 		}
 		ImGui::End();
@@ -450,7 +473,7 @@ int main(int argc, char** argv, char** env) {
 		ImGui::Text("ASIC Palette ptr:     0x%01X", top->top__DOT__asic__DOT__asic_regs__DOT__palette_ptr);  
 		ImGui::Separator();
 		//ImGui::Text("ACID POS:        0x%01X", top->top__DOT__asic__DOT__asic_regs__DOT__acid_pos); 
-		ImGui::Text("ACID UNLOCKED:   0x%01X", top->top__DOT__asic__DOT__asic_regs__DOT__acid_unlocked); 
+		ImGui::Text("ACID UNLOCKED:   0x%01X", top->top__DOT__asic__DOT__asic_regs__DOT__acid_unlock_reg); 
 		ImGui::End();
 
 		ImGui::Begin("Gate Array");

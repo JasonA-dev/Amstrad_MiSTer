@@ -9,9 +9,9 @@ module top (
     input              inputs,
     
     // Video output
-    output wire [5:0]  VGA_R,
-    output wire [5:0]  VGA_G,
-    output wire [5:0]  VGA_B,
+    output wire [7:0]  VGA_R,
+    output wire [7:0]  VGA_G,
+    output wire [7:0]  VGA_B,
     output wire        VGA_HS,
     output wire        VGA_VS,
     output wire        VGA_HB,
@@ -91,7 +91,6 @@ end
 // Reset logic
 reg RESET = 1;
 reg rom_loaded = 0;
-reg plus_mode = 0;  // Start with Plus mode disabled
 
 // Add download tracking
 reg download_started = 0;
@@ -123,9 +122,6 @@ always @(posedge clk_48) begin
     // Handle download completion
     if (ioctl_downlD && !ioctl_download) begin
         rom_loaded <= 1;
-        if (plus_download & plus_valid) begin
-            plus_mode <= 1; // was 1
-        end
         download_started <= 0;
         RESET <= 0;
         $display("DEBUG: Download complete at addr=%h, plus_download=%b, plus_valid=%b", 
@@ -136,7 +132,6 @@ always @(posedge clk_48) begin
     if (reset) begin
         RESET <= 1;
         rom_loaded <= 0;
-        plus_mode <= 0;
         download_started <= 0;
         download_addr <= 0;
         last_addr <= 0;
@@ -365,15 +360,20 @@ wire        hbl;
 wire        vbl;
 wire        hs;
 wire        vs;
-wire [1:0]  r;
-wire [1:0]  g;
-wire [1:0]  b;
+wire [3:0]  r;
+wire [3:0]  g;
+wire [3:0]  b;
 wire        VGA_F1;
+
+// raw 2‑bit GA outputs (LSBs of motherboard colour buses)
+wire [1:0] ga_r2 = r[1:0];
+wire [1:0] ga_g2 = g[1:0];
+wire [1:0] ga_b2 = b[1:0];
 
 // Memory interface signals
 wire [7:0]  ram_dout;
 wire [22:0] ram_a;
-wire [7:0]  cpu_din = ram_dout & mf2_dout & asic_data_out;  // Add ASIC data to CPU input
+wire [7:0]  cpu_din = ram_dout & mf2_dout; // & asic_data_out;  // Add ASIC data to CPU input
 
 // Video memory interface signals
 wire [14:0] vram_addr;
@@ -505,7 +505,7 @@ Amstrad_motherboard motherboard
     .crtc_type(1'b1),  // Type 1 CRTC
     .sync_filter(1'b1),
     .no_wait(1'b0),    // Enable proper wait states
-    .plus_mode(1'b1),  // Enable Plus mode to match GX4000_registers
+    //.plus_mode(plus_mode),  // Enable Plus mode to match GX4000_registers
 
     .tape_in(1'b0),
     .tape_out(),
@@ -516,9 +516,9 @@ Amstrad_motherboard motherboard
 
     .mode(mode),
 
-    .red(r),
-    .green(g),
-    .blue(b),
+    .red_o(r),
+    .green_o(g),
+    .blue_o(b),
     .hblank(hbl),
     .vblank(vbl),
     .hsync(hs),
@@ -555,13 +555,39 @@ Amstrad_motherboard motherboard
     .rom_select(rom_select),
     .pen_registers(pen_registers),
     .current_pen(current_pen)
-    //.rmr2(rmr2)
 );
 
-// Video output conversion - expanding 2-bit color to 6-bit
-assign VGA_R = {r, r, r};
-assign VGA_G = {g, g, g};
-assign VGA_B = {b, b, b};
+// ---------------------------------------------------------------------
+// Convert original Gate‑Array 2‑bit coding to 8‑bit RGB for simulation
+// (Plus‑mode 4‑bit colours already arrive as full‑range values, so we
+// simply pass them through when any upper nibble bit is set).
+// ---------------------------------------------------------------------
+wire [7:0] ga_r8, ga_g8, ga_b8;
+color_mix ga2rgb (
+    .clk_vid     (clk_48),
+    .ce_pix      (ce_pix),
+    .mix         (3'b000),   // normal colour
+    .R_in        (r),
+    .G_in        (g),
+    .B_in        (b),
+    .HSync_in    (hs),
+    .VSync_in    (vs),
+    .HBlank_in   (hbl),
+    .VBlank_in   (vbl),
+    .R_out       (ga_r8),
+    .G_out       (ga_g8),
+    .B_out       (ga_b8),
+    .HSync_out   (),         // not used here
+    .VSync_out   (),
+    .HBlank_out  (),
+    .VBlank_out  ()
+);
+
+// If Plus palette is active (upper nibble non‑zero) use it, otherwise GA
+assign VGA_R = ga_r8;
+assign VGA_G = ga_g8;
+assign VGA_B = ga_b8;
+
 assign VGA_HS = ~hs;  // Invert for VGA
 assign VGA_VS = ~vs;  // Invert for VGA
 assign VGA_HB = hbl;
@@ -632,7 +658,6 @@ cartridge cart
 (
     .clk_sys(clk_48),
     .reset(RESET),
-    .plus_mode(plus_rom_loaded),
     
     // ROM loading interface
     .ioctl_wr(ioctl_wr),

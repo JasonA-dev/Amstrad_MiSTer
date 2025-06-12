@@ -14,6 +14,7 @@ verilator \
     ../rtl/dpram.sv \
     ../rtl/hid.sv \
     ../rtl/mock_sdram.v \
+    ../rtl/plus_controller.v \
     ../rtl/ASIC.sv \
     ../rtl/cartridge.v \
     ../rtl/GA40010/ga40010.sv \

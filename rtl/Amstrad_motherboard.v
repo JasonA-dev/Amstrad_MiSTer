@@ -47,9 +47,10 @@ module Amstrad_motherboard
 
 	output  [1:0] mode,
 
-	output  [1:0] red,
-	output  [1:0] green,
-	output  [1:0] blue,
+	output  [5:0] red_o,
+	output  [5:0] green_o,
+	output  [5:0] blue_o,
+
 	output        hblank,
 	output        vblank,
 	output        hsync,
@@ -255,19 +256,7 @@ crt_filter crt_filter
 	.SHIFT(crtc_shift)
 );
 
-//wire [7:0] mrer;
-reg  [7:0] mrer_reg;
-
-// MRER register handling
-always @(posedge clk) begin
-	if (reset) begin
-		mrer_reg <= 8'h00;
-	end else if (io_wr && A[15:8] == 8'h7F && D[7:5] == 3'b100 && plus_mode) begin
-		mrer_reg <= D;
-	end
-end
-
-//assign mrer = mrer_reg;
+wire block_ctrl;
 
 ga40010 GateArray (
 	.clk(clk),
@@ -283,8 +272,8 @@ ga40010 GateArray (
 	.HSYNC_I(crtc_hs),
 	.VSYNC_I(crtc_vs),
 	.DISPEN(crtc_de),
-	.plus_mode(plus_mode),
-	//.mrer(mrer),
+
+	.block_ctrl_en(block_ctrl),  // new
 
 	.CCLK(),
 	.CCLK_EN_P(cclk_en_p),
@@ -304,9 +293,12 @@ ga40010 GateArray (
 	.HSYNC_O(hsync_ga),
 	.VSYNC_O(vsync_ga),
 	.VBLANK(vblank_ga),
+
+	.PEN_ID(pen_id), // new
+
 	.MODE(mode),
 	.SYNC_N(),
-	.INT_N(INT_n),
+	.INT_N(int_ga),
 	.BLUE_OE_N(blue[0]),
 	.BLUE(blue[1]),
 	.GREEN_OE_N(green[0]),
@@ -315,19 +307,109 @@ ga40010 GateArray (
 	.RED(red[1])
 );
 
+wire romL, romH, int_en, mode0, mode1, rmr2_act, rmr2_pulse;
+wire [2:0] cart_pg;
+
 Amstrad_MMU MMU
 (
-	.CLK(clk),
+	.CLK(clk), 
 	.reset(reset),
-	.ram64k(ram64k),
+    .ram64k(ram64k), 
 	.romen_n(romen_n),
-	.rom_map(rom_map),
-	.io_WR(io_wr),
-	.plus_mode(plus_mode),
-	.D(D),
+    .rom_map(rom_map),
+    .io_WR(io_wr), 
+	.D(D), 
 	.A(A),
-	.ram_A(mem_addr)
+    .ram_A(mem_addr),
+
+	// plus controller outputs
+    .rom_low_on(romL), 
+	.rom_high_on(romH),
+    .int_enable(int_en),
+    .mode0(mode0), 
+	.mode1(mode1),
+    .rmr2_active(rmr2_act),
+    .cart_page(cart_pg),
+    .rmr2_now(rmr2_pulse)
 );
+
+//--------------------------------------------------------------------------
+//  Colour sources
+//--------------------------------------------------------------------------
+wire [1:0] red, green, blue;           // classic GA pins
+wire [7:0] plus_r8, plus_g8, plus_b8;  // new 8-bit outputs from plus_ctrl
+
+// Detect when the Plus palette is really in use: any upper nibble non‑zero
+wire use_plus_palette =
+        |plus_r8[7:4] | |plus_g8[7:4] | |plus_b8[7:4];
+
+
+reg  [5:0] vga_r6, vga_g6, vga_b6;
+
+//--------------------------------------------------------------------------
+//  Pixel-clocked latch (one register fixes the phase issue)
+//--------------------------------------------------------------------------
+always @(posedge clk) if (ce_16) begin
+    if (use_plus_palette) begin
+        // use the TOP six bits of the 8-bit value (0–255 → 0–63)
+        vga_r6 <= plus_r8[7:2];
+        vga_g6 <= plus_g8[7:2];
+        vga_b6 <= plus_b8[7:2];
+    end else begin
+        // duplicate GA TTL pair  (00,01,10,11 → 0,21,42,63)
+        vga_r6 <= { red  , red  , red  };
+        vga_g6 <= { green, green, green};
+        vga_b6 <= { blue , blue , blue };
+    end
+end
+
+//--------------------------------------------------------------------------
+//  Drive the 6-bit VGA DAC / HDMI core
+//--------------------------------------------------------------------------
+assign red_o   = vga_r6;
+assign green_o = vga_g6;
+assign blue_o  = vga_b6;
+
+wire pen_id;
+
+wire cpu_ack  = (~m1) & (~iorq);   // TV80 active-low signals
+assign INT_n = int_plus & int_ga;  // wired-AND to the CPU core
+
+/*
+plus_controller #(
+    .CLK_FREQ_HZ(48_000_000)  
+) plus_ctrl (
+    .clk        (clk),
+    .cen_16     (ce_16),
+    .reset_n    (~reset),
+
+    .A          (A),
+    .D          (D),
+    .IO_WR      (io_wr),
+
+    .MEM_WR   (mem_wr),
+    .MEM_A    (cpu_addr),
+    .MEM_D    (cpu_dout),
+
+    .int_enable (int_en),
+    .rmr2_now   (rmr2_pulse),
+	.rmr2_active (rmr2_act),   // <- existing MMU signal
+
+    .vsync_i    (vsync_ga),
+    .ga_pen     (pen_id),
+
+    .rgb_r      (plus_r8),
+    .rgb_g      (plus_g8),
+    .rgb_b      (plus_b8),
+
+    .block_ctrl_en(block_ctrl),
+
+	.cpu_ack    (cpu_ack),
+    .int_n      (int_plus)
+);
+*/
+
+wire int_plus = 1'b0;
 
 wire [7:0] ppi_dout;
 wire [7:0] portC;
