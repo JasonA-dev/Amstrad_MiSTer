@@ -82,6 +82,8 @@ module Amstrad_motherboard
 	input         nmi,
 	output        cursor,
 
+	input 	     acid_unlocked,
+
 	// Register outputs from GX4000_registers
 	input  [7:0] ram_config,
 	input  [7:0] mrer,
@@ -340,10 +342,7 @@ wire [1:0] red, green, blue;           // classic GA pins
 wire [7:0] plus_r8, plus_g8, plus_b8;  // new 8-bit outputs from plus_ctrl
 
 // Detect when the Plus palette is really in use: any upper nibble non‑zero
-wire use_plus_palette =
-        |plus_r8[7:4] | |plus_g8[7:4] | |plus_b8[7:4];
-
-
+wire use_plus_palette = |plus_r8[7:4] | |plus_g8[7:4] | |plus_b8[7:4];
 reg  [5:0] vga_r6, vga_g6, vga_b6;
 
 //--------------------------------------------------------------------------
@@ -375,7 +374,6 @@ wire pen_id;
 wire cpu_ack  = (~m1) & (~iorq);   // TV80 active-low signals
 assign INT_n = int_plus & int_ga;  // wired-AND to the CPU core
 
-/*
 plus_controller #(
     .CLK_FREQ_HZ(48_000_000)  
 ) plus_ctrl (
@@ -403,11 +401,11 @@ plus_controller #(
     .rgb_b      (plus_b8),
 
     .block_ctrl_en(block_ctrl),
-
+    .acid_unlocked(acid_unlocked),
+	
 	.cpu_ack    (cpu_ack),
     .int_n      (int_plus)
 );
-*/
 
 wire int_plus = 1'b0;
 

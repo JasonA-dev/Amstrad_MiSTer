@@ -549,6 +549,8 @@ Amstrad_motherboard motherboard
     .nmi(NMI),
     .cursor(cursor),
 
+    .acid_unlocked(acid_unlocked),
+    
     // Register outputs from ASIC to motherboard
     .ram_config(ram_config),
     .mrer(mrer),

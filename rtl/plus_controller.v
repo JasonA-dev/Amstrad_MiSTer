@@ -28,6 +28,8 @@ module plus_controller #(
     input  wire        rmr2_active, // level: ASIC window enabled
     input  wire        rmr2_now,   // pulse: RMR2 just written (GA mask)
 
+    input  wire        acid_unlocked,
+
     // ─── handshake back to Gate-Array ─────────────────────────────────────
     output wire        block_ctrl_en,   // masks GA CTRL reg if 1
 
@@ -57,8 +59,8 @@ wire wr_stb   = IO_WR & ~io_wr_q;                 // 1‑cycle pulse
 wire is_7F  = (A[15:8] == 8'h7F);
 
 // palette commands are 00xxxxxx (pointer) or 01xxxxxx (colour RG)
-wire pal_stb = wr_stb & is_7F &
-               (D[7:6] == 2'b00 || D[7:6] == 2'b01);
+wire pal_cmd = is_7F & (D[7:6] == 2'b00 || D[7:6] == 2'b01);
+wire pal_stb = wr_stb & pal_cmd & acid_unlocked;   // *** gate by unlock ***
 
 // ══════════════════════════════════════════════════════════════════════════
 // 1.  GA CTRL mask (for RMR2 writes)

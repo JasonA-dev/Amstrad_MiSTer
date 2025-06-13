@@ -288,7 +288,7 @@ int main(int argc, char** argv, char** env) {
 	//bus.QueueDownload("./CPC_PLUS.CPR", 5, true);
 
 	// CPR downloads
-	//bus.QueueDownload("./cpr/Barbarian II (1990)(Ocean).cpr", 5, true);  				// Frame, ACID unlocked
+	bus.QueueDownload("./cpr/Barbarian II (1990)(Ocean).cpr", 5, true);  				// Frame, ACID unlocked
 	//bus.QueueDownload("./cpr/Batman the Movie (1990)(Ocean).cpr", 5, true);  			// Frame, ACID unlocked
 	//bus.QueueDownload("./cpr/Batman the Movie (1990)(Ocean)[a].cpr", 5, true);  		// Frame, ACID unlocked
 	//bus.QueueDownload("./cpr/Burnin' Rubber (1990)(Ocean).cpr", 5, true); 			// NO Frame
