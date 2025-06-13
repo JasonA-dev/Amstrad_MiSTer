@@ -185,7 +185,8 @@ wire       ink_en      = reg_sel & ~D[7] & ~D[6];
 wire       border_en   = reg_sel & ~D[7] &  D[6] &  inksel[4];
 
 wire       ctrl_en_raw = reg_sel &  D[7] & ~D[6];
-wire       ctrl_en     = ctrl_en_raw & ~block_ctrl_en;   // new
+wire ga_ctrl_byte = (D[7:6]==2'b11);
+wire ctrl_en = ctrl_en_raw & ~(block_ctrl_en & ga_ctrl_byte);
 
 wire       inkr_en   = reg_sel & ~D[7] &  D[6] & ~inksel[4];
 

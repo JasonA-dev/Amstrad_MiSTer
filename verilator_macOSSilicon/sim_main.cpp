@@ -288,7 +288,7 @@ int main(int argc, char** argv, char** env) {
 	//bus.QueueDownload("./CPC_PLUS.CPR", 5, true);
 
 	// CPR downloads
-	bus.QueueDownload("./cpr/Barbarian II (1990)(Ocean).cpr", 5, true);  				// Frame, ACID unlocked
+	//bus.QueueDownload("./cpr/Barbarian II (1990)(Ocean).cpr", 5, true);  				// Frame, ACID unlocked
 	//bus.QueueDownload("./cpr/Batman the Movie (1990)(Ocean).cpr", 5, true);  			// Frame, ACID unlocked
 	//bus.QueueDownload("./cpr/Batman the Movie (1990)(Ocean)[a].cpr", 5, true);  		// Frame, ACID unlocked
 	//bus.QueueDownload("./cpr/Burnin' Rubber (1990)(Ocean).cpr", 5, true); 			// NO Frame
@@ -524,6 +524,7 @@ int main(int argc, char** argv, char** env) {
 		ImGui::Text("Data IN:          0x%04X", top->top__DOT__motherboard__DOT__CRTC__DOT__DI);
 		ImGui::End();
 		
+
 		// Trace window
 		ImGui::Begin(windowTitle_Trace);
 		ImGui::SetWindowPos(windowTitle_Trace, ImVec2(0, 870), ImGuiCond_Once);

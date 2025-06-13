@@ -71,8 +71,8 @@ always @(posedge CLK) begin
         ROMbank    <= 8'd0;
         RAMmap     <= 3'd0;
         RAMpage    <= 5'd3;
-        mrer_reg   <= 8'd0;
-        rmr2_reg   <= 8'd0;
+        mrer_reg   <= 8'h88;
+        rmr2_reg   <= 8'h00;
         rmr2_pulse <= 1'b0;
     end
     else begin
@@ -98,10 +98,7 @@ always @(posedge CLK) begin
             end
 
             // -------- DFxx group (upper-bank ROM select) --------------------
-            if (A[15:8] == 8'hDF) begin
-                // Only update if the page actually exists
-                ROMbank <= rom_map[D] ? D : 8'h00;
-            end
+            if (A[15:8]==8'hDF) ROMbank <= D;   // no rom_map test
         end
     end
 end
@@ -111,13 +108,15 @@ assign rmr2_now     = rmr2_pulse;
 // ──────────────────────────────────────────────────────────────────────────────
 //  Decode MRER bits for external use
 // ──────────────────────────────────────────────────────────────────────────────
-assign rom_low_on   = ~mrer_reg[0];   // 1 = enabled (MRER bit0 = 0)
-assign rom_high_on  = ~mrer_reg[1];
+wire upper_disable = mrer_reg[6];
+assign rom_high_on = ~upper_disable & ~mrer_reg[1];
+assign rom_low_on  = ~upper_disable & ~mrer_reg[0];
+
 assign mode0        =  mrer_reg[2];
 assign mode1        =  mrer_reg[3];
 assign int_enable   =  mrer_reg[4];
 
-assign rmr2_active  =  rmr2_reg[5];
+assign rmr2_active = rmr2_reg[5] & ~mrer_reg[3];
 assign cart_page    =  rmr2_reg[2:0];
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -139,10 +138,10 @@ always @* begin
     // ---------- Plus low-bank override (RMR2) ------------------------------
     if (rmr2_active && rom_low_on) begin
         case (rmr2_reg[4:3])
-            2'b00: if (A[15:14]==2'b00) page_sel = {1'b1, 5'b00000, cart_page};
-            2'b01: if (A[15:14]==2'b01) page_sel = {1'b1, 5'b00000, cart_page};
-            2'b10: if (A[15:14]==2'b10) page_sel = {1'b1, 5'b00000, cart_page};
-            2'b11: if (A[15:14]==2'b01) page_sel = {1'b1, 5'b00000, cart_page}; // ASIC regs at 4000-7FFF; still expose cart in GA address space
+            2'b00: if (A[15:14]==2'b00) page_sel = {1'b1, A[15:14], cart_page, 3'b000};
+            2'b01: if (A[15:14]==2'b01) page_sel = {1'b1, A[15:14], cart_page, 3'b000};
+            2'b10: if (A[15:14]==2'b10) page_sel = {1'b1, A[15:14], cart_page, 3'b000};
+            2'b11: if (A[15:14]==2'b11) page_sel = {1'b1, A[15:14], cart_page, 3'b000};
         endcase
     end
 end
